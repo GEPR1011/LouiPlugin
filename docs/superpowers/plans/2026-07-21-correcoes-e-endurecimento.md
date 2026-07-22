@@ -555,7 +555,7 @@ Em `src/main/resources/config.yml`, dentro do bloco `void:`, depois de `min-y`:
 
 ```yaml
   # Cada preso ocupa uma faixa de altura propria, pra dois presos simultaneos nao
-  # caírem no mesmo ponto. A altura de queda de cada faixa e (top-y - min-y).
+  # ocuparem o mesmo ponto. A altura de queda de cada faixa e (top-y - min-y).
   band-gap: 100.0
   max-bands: 8
 ```
@@ -1007,11 +1007,8 @@ Substituir `handleJoin` por:
             prisons.remove(player.getUniqueId());
             voidState.releaseBand(prison.band);
             save();
-            notifyStaff(msg("jailed-broadcast-staff", "&7%player% e imune — castigo descartado.")
-                    .replace("%player%", player.getName())
-                    .replace("%time%", "-")
-                    .replace("%minutes%", "0")
-                    .replace("%reason%", "imune"), player.getUniqueId());
+            notifyStaff(msg("exempt-discarded", "&7%player% e imune ao castigo — punicao descartada.")
+                    .replace("%player%", player.getName()), player.getUniqueId());
             return;
         }
 
@@ -1047,6 +1044,7 @@ Em `config.yml`, dentro de `messages:`:
 
 ```yaml
   never-joined: '&cEsse jogador nunca entrou no servidor.'
+  exempt-discarded: '&7%player% e imune ao castigo — punicao descartada.'
 ```
 
 - [ ] **Step 5: Compilar**
