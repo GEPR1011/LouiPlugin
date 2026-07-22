@@ -3,6 +3,7 @@ package com.nemonicorp.loui;
 import com.nemonicorp.loui.api.LouiImprisonEvent;
 import com.nemonicorp.loui.api.LouiReleaseEvent;
 import com.nemonicorp.loui.api.ReleaseCause;
+import com.nemonicorp.loui.mode.JailMode;
 import com.nemonicorp.loui.mode.PunishmentMode;
 import com.nemonicorp.loui.mode.VoidMode;
 import org.bukkit.Bukkit;
@@ -43,6 +44,7 @@ public class PrisonManager {
         long totalMs;
         String reason;
         int band = -1;    // faixa de altura ocupada; -1 = nao atribuida
+        String mode = "void";   // em qual modo o castigo foi aplicado
         transient BossBar bar;
 
         /** Acessores para o pacote mode, que vive fora deste pacote. */
@@ -57,11 +59,27 @@ public class PrisonManager {
 
     private final LouiPlugin plugin;
     private final Map<UUID, Prison> prisons = new HashMap<>();
-    private final PunishmentMode voidState;
+    private final PunishmentMode voidMode;
+    private final PunishmentMode jailMode;
 
     public PrisonManager(LouiPlugin plugin) {
         this.plugin = plugin;
-        this.voidState = new VoidMode(plugin);
+        this.voidMode = new VoidMode(plugin);
+        this.jailMode = new JailMode(plugin);
+    }
+
+    /** O modo que o servidor usa agora, conforme o config. */
+    public PunishmentMode activeMode() {
+        return "jail".equalsIgnoreCase(plugin.getConfig().getString("mode", "void"))
+                ? jailMode : voidMode;
+    }
+
+    /**
+     * O modo em que ESTE castigo foi aplicado — nao o do config atual.
+     * E o que impede o desastre de trocar o modo com gente presa.
+     */
+    private PunishmentMode modeFor(Prison prison) {
+        return "jail".equalsIgnoreCase(prison.mode) ? jailMode : voidMode;
     }
 
     // ── Mensagens ──
@@ -84,7 +102,8 @@ public class PrisonManager {
     }
 
     public boolean isInternalTeleport(UUID uuid) {
-        return voidState.isInternalTeleport(uuid);
+        // Consulta os dois: o listener nao sabe de qual modo veio o teleporte.
+        return voidMode.isInternalTeleport(uuid) || jailMode.isInternalTeleport(uuid);
     }
 
     /**
@@ -147,6 +166,7 @@ public class PrisonManager {
             prison.returnLocation = target.getLocation().clone();
             prison.returnGameMode = target.getGameMode();
             prison.returnAllowFlight = target.getAllowFlight();
+            prison.mode = activeMode().id();
         }
 
         prison.playerName = target.getName();
@@ -157,7 +177,7 @@ public class PrisonManager {
         prisons.put(uuid, prison);
         save();
 
-        applyVoidState(target, prison);
+        applyPunishment(target, prison);
 
         String m1 = msg("jailed-target", "&cVoce foi contido pelo motivo: &f%reason% &7(%time%)")
                 .replace("%reason%", reason)
@@ -188,6 +208,7 @@ public class PrisonManager {
             prison.returnLocation = null;      // capturada no primeiro login
             prison.returnGameMode = null;      // idem
             prison.returnAllowFlight = false;
+            prison.mode = activeMode().id();
         }
 
         prison.playerName = name;
@@ -292,8 +313,9 @@ public class PrisonManager {
 
         if (prison.bar != null) prison.bar.removeAll();
 
-        voidState.restore(player, prison.returnLocation, prison.returnGameMode, prison.returnAllowFlight);
-        if (voidState instanceof VoidMode vm) vm.releaseBand(prison.band);
+        PunishmentMode mode = modeFor(prison);
+        mode.restore(player, prison.returnLocation, prison.returnGameMode, prison.returnAllowFlight);
+        if (mode instanceof VoidMode vm) vm.releaseBand(prison.band);
 
         player.sendMessage(msg("released", "&aVoce foi libertado. Comporte-se."));
         if (persist) save();
@@ -302,8 +324,8 @@ public class PrisonManager {
     }
 
     /** Aplica o estado de vazio e monta a bossbar. */
-    private void applyVoidState(Player player, Prison prison) {
-        voidState.apply(player, prison);
+    private void applyPunishment(Player player, Prison prison) {
+        modeFor(prison).apply(player, prison);
 
         if (prison.bar == null) {
             BarColor color;
@@ -347,7 +369,7 @@ public class PrisonManager {
             }
 
             // Mantem o preso onde deve estar e reafirma os efeitos
-            voidState.contain(player, prison);
+            modeFor(prison).contain(player, prison);
 
             updateBar(prison);
         }
@@ -367,7 +389,7 @@ public class PrisonManager {
         // pra contornar loui.exempt punindo um admin enquanto ele estivesse fora.
         if (player.hasPermission("loui.exempt")) {
             prisons.remove(player.getUniqueId());
-            if (voidState instanceof VoidMode vm) vm.releaseBand(prison.band);
+            if (modeFor(prison) instanceof VoidMode vm) vm.releaseBand(prison.band);
             save();
             Bukkit.getPluginManager().callEvent(
                     new LouiReleaseEvent(player, prison.reason, ReleaseCause.EXEMPT));
@@ -381,7 +403,7 @@ public class PrisonManager {
                 // Punicao offline que expirou antes do primeiro login: nunca chegou a
                 // ser aplicada, entao nao ha nada a restaurar nem para onde teleportar.
                 prisons.remove(player.getUniqueId());
-                if (voidState instanceof VoidMode vm) vm.releaseBand(prison.band);
+                if (modeFor(prison) instanceof VoidMode vm) vm.releaseBand(prison.band);
                 save();
                 Bukkit.getPluginManager().callEvent(
                         new LouiReleaseEvent(player, prison.reason, ReleaseCause.EXPIRED));
@@ -400,7 +422,7 @@ public class PrisonManager {
         }
 
         prison.playerName = player.getName();
-        applyVoidState(player, prison);
+        applyPunishment(player, prison);
     }
 
     public void handleQuit(Player player) {
@@ -441,6 +463,7 @@ public class PrisonManager {
             yaml.set(base + "gamemode", p.returnGameMode == null ? "SURVIVAL" : p.returnGameMode.name());
             yaml.set(base + "allow-flight", p.returnAllowFlight);
             yaml.set(base + "band", p.band);
+            yaml.set(base + "mode", p.mode);
             Location l = p.returnLocation;
             if (l != null && l.getWorld() != null) {
                 yaml.set(base + "loc.world", l.getWorld().getName());
@@ -482,6 +505,8 @@ public class PrisonManager {
                 }
                 p.returnAllowFlight = sec.getBoolean("allow-flight", false);
                 p.band = sec.getInt("band", -1);
+                // Default "void": era o unico modo antes da v1.3.0.
+                p.mode = sec.getString("mode", "void");
 
                 String worldName = sec.getString("loc.world", null);
                 World world = worldName == null ? null : Bukkit.getWorld(worldName);
@@ -492,7 +517,7 @@ public class PrisonManager {
                 }
 
                 prisons.put(uuid, p);
-                if (voidState instanceof VoidMode vm) vm.reserveBand(p.band);
+                if (modeFor(p) instanceof VoidMode vm) vm.reserveBand(p.band);
             } catch (IllegalArgumentException ignored) {
             }
         }
