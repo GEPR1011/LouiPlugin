@@ -59,6 +59,9 @@ messages:
   # Texto de %loui_jailed% (PlaceholderAPI)
   placeholder-yes: 'sim'
   placeholder-no: 'nao'
+  players-only: '&cSo um jogador pode usar isso.'
+  jail-set: '&aJail definida onde voce esta.'
+  jail-not-configured: '&cA jail nao foi configurada. Use /loui setjail e defina um raio.'
 
 safety:
   # Solta todos os presos ONLINE quando o plugin e desabilitado. Sem isso, remover

@@ -127,6 +127,39 @@ public class PrisonManager {
         return names;
     }
 
+    /** true se o castigo deste jogador o torna invulneravel. */
+    public boolean isInvulnerableFor(UUID uuid) {
+        Prison prison = prisons.get(uuid);
+        if (prison == null) return false;
+        return modeFor(prison).effects().isInvulnerable();
+    }
+
+    /**
+     * Recoloca o jogador sob castigo depois de morrer.
+     *
+     * Sem isto, com invulnerable desligado, morrer seria fuga: o respawn joga o
+     * jogador no spawn do mundo e handleJoin nao roda, porque respawn nao e login.
+     */
+    public void reapplyAfterRespawn(Player player) {
+        Prison prison = prisons.get(player.getUniqueId());
+        if (prison == null) return;
+        applyPunishment(player, prison);
+    }
+
+    /** Grava a posicao atual do jogador como centro da jail. Nao mexe no raio. */
+    public void setJailHere(Player player) {
+        Location loc = player.getLocation();
+        plugin.getConfig().set("jail.world", loc.getWorld().getName());
+        plugin.getConfig().set("jail.x", loc.getX());
+        plugin.getConfig().set("jail.y", loc.getY());
+        plugin.getConfig().set("jail.z", loc.getZ());
+        plugin.saveConfig();
+
+        plugin.getLogger().info("[LOUI] Jail definida por " + player.getName()
+                + " em " + loc.getWorld().getName()
+                + " " + String.format("%.1f %.1f %.1f", loc.getX(), loc.getY(), loc.getZ()));
+    }
+
     /** Quantos castigos existem, incluindo os de jogadores offline. */
     public int getPrisonerCount() {
         return prisons.size();

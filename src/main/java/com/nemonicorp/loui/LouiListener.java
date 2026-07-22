@@ -12,6 +12,7 @@ import org.bukkit.event.player.PlayerCommandPreprocessEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.event.player.PlayerTeleportEvent;
 
 /**
@@ -28,10 +29,13 @@ public class LouiListener implements Listener {
         this.manager = manager;
     }
 
-    // Invulneravel: nao recebe dano nenhum (inclui void, queda, ataques)
+    // Invulneravel apenas se o modo do castigo pedir. Com invulnerable: false o
+    // preso pode morrer — e o onRespawn abaixo o recoloca sob castigo.
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onDamage(EntityDamageEvent event) {
-        if (event.getEntity() instanceof Player p && manager.isImprisoned(p.getUniqueId())) {
+        if (event.getEntity() instanceof Player p
+                && manager.isImprisoned(p.getUniqueId())
+                && manager.isInvulnerableFor(p.getUniqueId())) {
             event.setCancelled(true);
         }
     }
@@ -106,5 +110,16 @@ public class LouiListener implements Listener {
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         manager.handleQuit(event.getPlayer());
+    }
+
+    // Morrer nao pode ser fuga: o respawn joga o jogador no spawn do mundo, e
+    // handleJoin nao roda porque respawn nao e login.
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onRespawn(PlayerRespawnEvent event) {
+        Player p = event.getPlayer();
+        if (!manager.isImprisoned(p.getUniqueId())) return;
+        // Adia um tick: teleportar dentro do proprio evento e ignorado, porque o
+        // servidor aplica a posicao de respawn depois dele.
+        plugin.getServer().getScheduler().runTask(plugin, () -> manager.reapplyAfterRespawn(p));
     }
 }
