@@ -329,6 +329,6 @@ Veja [LICENSE.txt](LICENSE.txt) para os termos completos.
 
 <div align="center">
 
-*Desenvolvido por **Guilherme Elias (gepr)** · Full Stack Dev @ NemonicRP*
+*Desenvolvido por **Guilherme Elias (gepr)** · Full Stack Dev*
 
 </div>
