@@ -28,6 +28,8 @@ messages:
   already-free: '&aJogador libertado.'
   usage: '&7Uso: /loui <nick> <tempo: 30m ou 2d> <motivo...> | /loui free <nick> | /loui list'
   is-exempt: '&cEsse jogador e imune ao castigo.'
+  never-joined: '&cEsse jogador nunca entrou no servidor.'
+  exempt-discarded: '&7%player% e imune ao castigo — punicao descartada.'
 
 safety:
   # Solta todos os presos ONLINE quando o plugin e desabilitado. Sem isso, remover

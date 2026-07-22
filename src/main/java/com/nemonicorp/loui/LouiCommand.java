@@ -1,6 +1,7 @@
 package com.nemonicorp.loui;
 
 import org.bukkit.Bukkit;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -64,17 +65,24 @@ public class LouiCommand implements CommandExecutor, TabCompleter {
         String reason = sb.toString();
 
         Player target = Bukkit.getPlayerExact(args[0]);
-        if (target == null) {
-            sender.sendMessage(manager.msg("not-online", "&cJogador nao esta online."));
+        if (target != null) {
+            if (target.hasPermission("loui.exempt")) {
+                sender.sendMessage(manager.msg("is-exempt", "&cEsse jogador e imune ao castigo."));
+                return true;
+            }
+            manager.imprison(target, minutes, reason, sender.getName());
             return true;
         }
 
-        if (target.hasPermission("loui.exempt")) {
-            sender.sendMessage(manager.msg("is-exempt", "&cEsse jogador e imune ao castigo."));
+        // Alvo offline: consulta o usercache local. NUNCA usar getOfflinePlayer(String),
+        // que dispara HTTP a Mojang na thread principal em servidor online-mode.
+        OfflinePlayer offline = Bukkit.getOfflinePlayerIfCached(args[0]);
+        if (offline == null || !offline.hasPlayedBefore()) {
+            sender.sendMessage(manager.msg("never-joined", "&cEsse jogador nunca entrou no servidor."));
             return true;
         }
 
-        manager.imprison(target, minutes, reason, sender.getName());
+        manager.imprisonOffline(offline, minutes, reason, sender.getName());
         return true;
     }
 

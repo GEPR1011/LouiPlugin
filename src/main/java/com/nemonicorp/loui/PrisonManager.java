@@ -4,6 +4,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.World;
 import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
@@ -121,6 +122,42 @@ public class PrisonManager {
         Bukkit.getConsoleSender().sendMessage(m2 + ChatColor.DARK_GRAY + " (por " + byWhom + ")");
 
         plugin.getLogger().info("[LOUI] " + target.getName() + " contido por " + pretty
+                + ". Motivo: " + reason + " (por " + byWhom + ")");
+    }
+
+    /**
+     * Pune um jogador que nao esta online. O castigo fica registrado sem localizacao
+     * de retorno; handleJoin captura a posicao de login e aplica o estado de vazio.
+     */
+    public void imprisonOffline(OfflinePlayer target, long minutes, String reason, String byWhom) {
+        UUID uuid = target.getUniqueId();
+        Prison prison = prisons.get(uuid);
+        if (prison == null) {
+            prison = new Prison();
+            prison.returnLocation = null;      // capturada no primeiro login
+            prison.returnGameMode = null;      // idem
+            prison.returnAllowFlight = false;
+        }
+
+        prison.playerName = target.getName() == null ? "?" : target.getName();
+        prison.reason = reason;
+        prison.totalMs = minutes * 60_000L;
+        prison.endTime = System.currentTimeMillis() + prison.totalMs;
+
+        prisons.put(uuid, prison);
+        save();
+
+        String pretty = TimeParser.formatDuration(minutes);
+        String m = msg("jailed-broadcast-staff", "&7%player% foi contido por %time%: &f%reason%")
+                .replace("%player%", prison.playerName)
+                .replace("%time%", pretty)
+                .replace("%minutes%", String.valueOf(minutes))
+                .replace("%reason%", reason);
+
+        notifyStaff(m, null);
+        Bukkit.getConsoleSender().sendMessage(m + ChatColor.DARK_GRAY + " (por " + byWhom + ", offline)");
+
+        plugin.getLogger().info("[LOUI] " + prison.playerName + " contido offline por " + pretty
                 + ". Motivo: " + reason + " (por " + byWhom + ")");
     }
 
@@ -246,13 +283,40 @@ public class PrisonManager {
         Prison prison = prisons.get(player.getUniqueId());
         if (prison == null) return;
 
-        if (System.currentTimeMillis() >= prison.endTime) {
-            // Expirou (ou foi libertado) enquanto estava offline
-            release(player);
-        } else {
-            prison.playerName = player.getName();
-            applyVoidState(player, prison);
+        // Imunidade so e consultavel com o jogador online. Sem esta checagem, daria
+        // pra contornar loui.exempt punindo um admin enquanto ele estivesse fora.
+        if (player.hasPermission("loui.exempt")) {
+            prisons.remove(player.getUniqueId());
+            voidState.releaseBand(prison.band);
+            save();
+            notifyStaff(msg("exempt-discarded", "&7%player% e imune ao castigo — punicao descartada.")
+                    .replace("%player%", player.getName()), player.getUniqueId());
+            return;
         }
+
+        if (System.currentTimeMillis() >= prison.endTime) {
+            if (prison.returnLocation == null) {
+                // Punicao offline que expirou antes do primeiro login: nunca chegou a
+                // ser aplicada, entao nao ha nada a restaurar nem para onde teleportar.
+                prisons.remove(player.getUniqueId());
+                voidState.releaseBand(prison.band);
+                save();
+            } else {
+                release(player);
+            }
+            return;
+        }
+
+        if (prison.returnLocation == null) {
+            // Primeiro login apos punicao offline: o ponto de retorno e onde ele entrou.
+            prison.returnLocation = player.getLocation().clone();
+            prison.returnGameMode = player.getGameMode();
+            prison.returnAllowFlight = player.getAllowFlight();
+            save();
+        }
+
+        prison.playerName = player.getName();
+        applyVoidState(player, prison);
     }
 
     public void handleQuit(Player player) {
