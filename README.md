@@ -35,6 +35,8 @@ Cumprido o castigo, o jogador retorna **exatamente** ao lugar e ao modo de jogo 
 - **Bossbar permanente** mostrando o motivo e o tempo restante
 - **Escuridão total** via Darkness + Blindness infinitos
 - **Queda infinita** — ao atingir o fundo, o jogador é reposicionado no topo
+- **Funciona com o jogador offline** — o griefer que desloga antes de o staff reagir não escapa
+- **Presos simultâneos não colidem** — cada um cai na sua própria faixa de altura
 - **Isolamento completo**: sem dano, sem drops, sem coleta de itens, sem fome, sem comandos
 - **À prova de fuga**: teleportes externos (ender pearl, `/spawn`, outros plugins) são bloqueados
 - **Persistente**: sobrevive a restart, reload e logout — o cronômetro corre em tempo real
@@ -83,14 +85,14 @@ Todos exigem a permissão `loui.use` (padrão: **op**).
 
 | Aspecto | Comportamento |
 |---|---|
-| Posição | Teleportado para `x=250000.5, z=250000.5`, altura 5000 |
-| Queda | Ao passar de `y=1500`, volta ao topo — queda sem fim |
+| Posição | Teleportado para `x=250000.5, z=250000.5`, no topo da sua faixa (a primeira começa em `y=5000`) |
+| Queda | Ao cruzar o piso da própria faixa, volta ao topo dela — queda sem fim |
 | Visão | Darkness + Blindness infinitos (escuridão completa) |
 | Gamemode | Forçado para **Adventure**, voo desativado |
 | Dano | Invulnerável — e também **não causa** dano a ninguém |
 | Itens | Não dropa e não coleta nada |
 | Fome | Congelada |
-| Comandos | Todos bloqueados, com mensagem de aviso |
+| Comandos | Bloqueados, exceto os liberados em `allowed-commands` (vazio por padrão = bloqueia tudo) |
 | Teleporte | Qualquer teleporte de origem externa é cancelado |
 | Interface | Bossbar com o motivo e o tempo restante |
 
@@ -149,9 +151,11 @@ notify:
 
 ## 💾 Persistência
 
-O estado é gravado em `plugins/LouiPlugin/prisons.yml` e recarregado no start. Para cada jogador contido são guardados o nome, o motivo, o instante de término, a localização de retorno e o gamemode original.
+O estado é gravado em `plugins/LouiPlugin/prisons.yml` e recarregado no start. Para cada jogador contido são guardados o nome, o motivo, o instante de término, a localização de retorno, o gamemode original e a faixa de altura ocupada.
 
 O cronômetro usa **tempo real**, não tempo de jogo: se o castigo expirar enquanto o jogador está offline, ele é libertado automaticamente ao entrar. Se ainda restar tempo, o estado de vazio é reaplicado no login.
+
+Numa punição aplicada a alguém **offline** não há posição a capturar, então o ponto de retorno fica vazio até o primeiro login — é a posição de entrada que vira o destino de volta. Como o relógio corre em tempo real desde o comando, uma pena curta aplicada a quem está fora pode expirar antes de a pessoa voltar; nesse caso o registro é descartado sem teleportar ninguém. Para punição offline, prefira durações longas.
 
 ---
 
@@ -193,12 +197,17 @@ O JAR final fica em `target/LouiPlugin.jar`.
 LouiPlugin/
 ├── pom.xml                                  # configuração Maven + Paper API
 ├── src/main/java/com/nemonicorp/loui/
-│   ├── LouiPlugin.java                      # onEnable, comandos, tab-complete
+│   ├── LouiPlugin.java                      # onEnable/onDisable, wiring, tick de 1s
+│   ├── LouiCommand.java                     # /loui, tab-complete, imunidade
 │   ├── LouiListener.java                    # bloqueios (dano, drops, comandos, tp)
-│   └── PrisonManager.java                   # estado, bossbar, persistência, tick
-└── src/main/resources/
-    ├── plugin.yml                           # metadados, comando e permissão
-    └── config.yml                           # configuração padrão
+│   ├── PrisonManager.java                   # estado, persistência, bossbar
+│   ├── VoidState.java                       # teleporte, efeitos, faixas de altura
+│   ├── BandPool.java                        # ocupação das faixas
+│   └── TimeParser.java                      # parse e formatação de durações
+├── src/main/resources/
+│   ├── plugin.yml                           # metadados, comando e permissões
+│   └── config.yml                           # configuração padrão
+└── src/test/java/com/nemonicorp/loui/       # 24 testes de unidade
 ```
 
 ---
