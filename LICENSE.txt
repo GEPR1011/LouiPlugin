@@ -1,0 +1,65 @@
+LICENÇA DE USO — LouiPlugin
+Copyright (c) 2026 Guilherme Elias (gepr). Todos os direitos reservados.
+
+Este software é PROPRIETÁRIO. O código-fonte está publicamente visível
+apenas para fins de avaliação, auditoria e transparência técnica. Tornar o
+código legível NÃO concede qualquer licença de uso, cópia ou distribuição.
+
+
+1. CONCESSÃO DE LICENÇA
+
+O autor concede ao titular de uma licença válida, adquirida diretamente do
+autor, um direito não exclusivo, intransferível e revogável de executar o
+LouiPlugin em UM (1) servidor Minecraft, identificado no momento da compra.
+
+Cada servidor adicional exige uma licença própria.
+
+
+2. RESTRIÇÕES
+
+Salvo autorização prévia e por escrito do autor, é PROIBIDO:
+
+  a) redistribuir, revender, sublicenciar, emprestar, alugar ou publicar o
+     software ou qualquer parte dele, em forma de código-fonte ou compilada;
+  b) modificar, adaptar, traduzir ou criar obras derivadas;
+  c) realizar engenharia reversa, descompilar ou desofuscar o software;
+  d) remover ou alterar avisos de copyright, autoria ou desta licença;
+  e) executar o software em servidor não coberto por uma licença válida;
+  f) utilizar o código, no todo ou em parte, em outro projeto.
+
+
+3. PROPRIEDADE
+
+O software é licenciado, não vendido. O autor mantém a titularidade integral
+de todos os direitos autorais e de propriedade intelectual sobre o LouiPlugin,
+incluindo o código-fonte, os arquivos de configuração e a documentação.
+
+
+4. RESCISÃO
+
+Esta licença é rescindida automaticamente, sem aviso prévio, em caso de
+descumprimento de qualquer cláusula. Rescindida a licença, o titular deve
+cessar o uso e apagar todas as cópias do software.
+
+
+5. AUSÊNCIA DE GARANTIA
+
+O SOFTWARE É FORNECIDO "COMO ESTÁ", SEM GARANTIA DE QUALQUER NATUREZA,
+EXPRESSA OU IMPLÍCITA, INCLUINDO MAS NÃO SE LIMITANDO ÀS GARANTIAS DE
+COMERCIALIZAÇÃO, ADEQUAÇÃO A UMA FINALIDADE ESPECÍFICA E NÃO VIOLAÇÃO.
+
+
+6. LIMITAÇÃO DE RESPONSABILIDADE
+
+EM NENHUMA HIPÓTESE O AUTOR SERÁ RESPONSÁVEL POR QUAISQUER DANOS DIRETOS,
+INDIRETOS, INCIDENTAIS, ESPECIAIS OU CONSEQUENTES — INCLUINDO PERDA DE DADOS
+DE MUNDO, DE JOGADORES OU DE RECEITA — DECORRENTES DO USO OU DA IMPOSSIBILIDADE
+DE USO DESTE SOFTWARE.
+
+
+7. CONTATO
+
+Aquisição de licenças, suporte e autorizações:
+
+  Discord: gepr13
+  Email:   GEPRWORKOUT@gmail.com

@@ -1,0 +1,19 @@
+name: LouiPlugin
+version: 1.0.0
+main: com.nemonicorp.loui.LouiPlugin
+api-version: '1.21'
+description: Castigo void para conter jogadores mal intencionados.
+author: GEPR
+commands:
+  loui:
+    description: Envia um jogador pro vazio por um tempo determinado.
+    usage: |
+      /loui <nick> <minutos> <motivo...>
+      /loui free <nick>
+      /loui list
+    permission: loui.use
+
+permissions:
+  loui.use:
+    description: Permite usar o /loui.
+    default: op

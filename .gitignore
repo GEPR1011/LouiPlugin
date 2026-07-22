@@ -1,0 +1,26 @@
+# Build
+target/
+*.jar
+*.class
+
+# Maven wrapper (distribuição embutida — não versionar)
+.mvn/
+mvnw
+mvnw.cmd
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.classpath
+.project
+
+# SO
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Runtime do servidor
+prisons.yml
+logs/

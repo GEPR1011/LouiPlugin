@@ -1,0 +1,201 @@
+<div align="center">
+
+# ⛓️ LouiPlugin
+
+### Castigo no vazio para jogadores mal-intencionados
+
+[![Version](https://img.shields.io/badge/versão-v1.0.0-gold?style=for-the-badge&logo=minecraft&logoColor=white)](../../releases)
+[![Server](https://img.shields.io/badge/servidor-NemonicRP-purple?style=for-the-badge)](.)
+[![API](https://img.shields.io/badge/Paper%20%2F%20Spigot-1.21+-green?style=for-the-badge&logo=java)](.)
+[![Java](https://img.shields.io/badge/Java-21+-orange?style=for-the-badge&logo=openjdk)](.)
+[![Deps](https://img.shields.io/badge/dependências-nenhuma-lightgrey?style=for-the-badge)](.)
+
+*Alternativa ao ban · Sem dependências · Persistente entre restarts*
+
+**[⬇️ Download](../../releases/latest) · [📩 Contato para aquisição](#-contato)**
+
+</div>
+
+---
+
+## O que é o LouiPlugin?
+
+O **LouiPlugin** é uma ferramenta de moderação para servidores Minecraft Java. Em vez de banir ou congelar um jogador problemático, ele o envia para um **vazio escuro e infinito**, onde o jogador cai eternamente por um tempo determinado — sem ver nada, sem tomar dano, sem usar comandos e sem interagir com o mundo.
+
+Cumprido o castigo, o jogador retorna **exatamente** ao lugar e ao modo de jogo em que estava. Nada é perdido: nem itens, nem posição, nem progresso.
+
+É punição sem ruptura — o jogador continua conectado, o staff mantém o controle, e o servidor não perde um jogador que talvez só precise de um corretivo.
+
+---
+
+## ✦ Destaques
+
+- **Um único comando** — `/loui <nick> <tempo> <motivo>` e pronto
+- **Retorno exato**: posição, gamemode e permissão de voo são restaurados ao fim
+- **Bossbar permanente** mostrando o motivo e o tempo restante
+- **Escuridão total** via Darkness + Blindness infinitos
+- **Queda infinita** — ao atingir o fundo, o jogador é reposicionado no topo
+- **Isolamento completo**: sem dano, sem drops, sem coleta de itens, sem fome, sem comandos
+- **À prova de fuga**: teleportes externos (ender pearl, `/spawn`, outros plugins) são bloqueados
+- **Persistente**: sobrevive a restart, reload e logout — o cronômetro corre em tempo real
+- **Auto-correção**: um tick de 1s reaplica o estado caso outro plugin interfira
+- **Zero dependências** — só Paper/Spigot
+
+---
+
+## 🎮 Comandos
+
+Todos exigem a permissão `loui.use` (padrão: **op**).
+
+| Comando | O que faz |
+|---|---|
+| `/loui <nick> <tempo> <motivo...>` | Envia o jogador para o vazio pelo tempo indicado |
+| `/loui free <nick>` | Liberta antes da hora |
+| `/loui list` | Lista todos os jogadores contidos |
+
+### Formatos de tempo aceitos
+
+| Entrada | Significado |
+|:---:|---|
+| `30` | 30 minutos (número puro) |
+| `30m` | 30 minutos |
+| `2d` | 2 dias (2880 minutos) |
+
+```
+/loui Steve 30m griefando a base do spawn
+/loui Alex 2d uso de x-ray reincidente
+/loui free Steve
+/loui list
+```
+
+> Aplicar `/loui` em alguém **já contido** atualiza o tempo e o motivo, mas preserva o local de retorno original — não há risco de "prender" o jogador dentro do próprio vazio.
+
+---
+
+## ⛓️ O que acontece com o jogador contido
+
+| Aspecto | Comportamento |
+|---|---|
+| Posição | Teleportado para `x=250000.5, z=250000.5`, altura 5000 |
+| Queda | Ao passar de `y=1500`, volta ao topo — queda sem fim |
+| Visão | Darkness + Blindness infinitos (escuridão completa) |
+| Gamemode | Forçado para **Adventure**, voo desativado |
+| Dano | Invulnerável — e também **não causa** dano a ninguém |
+| Itens | Não dropa e não coleta nada |
+| Fome | Congelada |
+| Comandos | Todos bloqueados, com mensagem de aviso |
+| Teleporte | Qualquer teleporte de origem externa é cancelado |
+| Interface | Bossbar com o motivo e o tempo restante |
+
+Ao ser libertado, tudo é revertido: efeitos removidos, invulnerabilidade desligada, gamemode e voo restaurados, e teleporte de volta ao ponto exato de origem.
+
+---
+
+## ⚙️ Configuração
+
+Gerado em `plugins/LouiPlugin/config.yml` no primeiro start.
+
+```yaml
+void:
+  world: ''          # vazio = usa o mundo principal do servidor
+  x: 250000.5        # coordenadas longe de qualquer construção
+  z: 250000.5
+  top-y: 5000.0      # altura em que a queda começa
+  min-y: 1500.0      # ao cruzar essa altura, volta pro topo
+
+bossbar:
+  color: RED         # RED, BLUE, GREEN, PINK, PURPLE, WHITE, YELLOW
+
+messages:
+  prefix: '&8[&cLoui&8] &7'
+  jailed-target: '&cVoce foi contido pelo motivo: &f%reason% &7(%time%)'
+  jailed-broadcast-staff: '&7%player% foi contido por %time%: &f%reason%'
+  released: '&aVoce foi libertado. Comporte-se.'
+  no-commands: '&cVoce nao pode usar comandos enquanto estiver contido.'
+  # ...
+```
+
+**Placeholders disponíveis nas mensagens:** `%player%`, `%reason%`, `%time%`, `%minutes%`.
+
+> ⚠️ Escolha coordenadas realmente distantes. O jogador fica em Adventure e cego, mas o chunk existe — evite sobrepor construções.
+
+---
+
+## 💾 Persistência
+
+O estado é gravado em `plugins/LouiPlugin/prisons.yml` e recarregado no start. Para cada jogador contido são guardados o nome, o motivo, o instante de término, a localização de retorno e o gamemode original.
+
+O cronômetro usa **tempo real**, não tempo de jogo: se o castigo expirar enquanto o jogador está offline, ele é libertado automaticamente ao entrar. Se ainda restar tempo, o estado de vazio é reaplicado no login.
+
+---
+
+## ⚙️ Requisitos
+
+| Requisito | Versão |
+|---|---|
+| Minecraft Java | 1.21+ |
+| Server Software | Paper (recomendado) ou Spigot |
+| Java Runtime | 21+ |
+| Dependências | Nenhuma |
+
+---
+
+## 🚀 Como Instalar
+
+1. Baixe o `LouiPlugin.jar` em [Releases](../../releases/latest).
+2. Coloque na pasta `plugins/` do servidor.
+3. Inicie o servidor uma vez para gerar `plugins/LouiPlugin/config.yml`.
+4. Ajuste o `config.yml` se quiser e reinicie.
+5. Dê a permissão `loui.use` à sua equipe de staff.
+
+---
+
+## 🛠️ Como Compilar a partir do Código-Fonte
+
+Pré-requisitos: **JDK 21** e **Maven 3.8+**.
+
+```bash
+git clone https://github.com/GEPR1011/LouiPlugin.git
+cd LouiPlugin
+mvn clean package
+```
+
+O JAR final fica em `target/LouiPlugin.jar`.
+
+### Estrutura do projeto
+```
+LouiPlugin/
+├── pom.xml                                  # configuração Maven + Paper API
+├── src/main/java/com/nemonicorp/loui/
+│   ├── LouiPlugin.java                      # onEnable, comandos, tab-complete
+│   ├── LouiListener.java                    # bloqueios (dano, drops, comandos, tp)
+│   └── PrisonManager.java                   # estado, bossbar, persistência, tick
+└── src/main/resources/
+    ├── plugin.yml                           # metadados, comando e permissão
+    └── config.yml                           # configuração padrão
+```
+
+---
+
+## 📄 Licença
+
+Este plugin é um **software proprietário**. O código-fonte é público apenas para avaliação e auditoria — isso **não** concede licença de uso. É proibida a redistribuição, cópia, modificação ou uso sem autorização explícita do autor. A licença é concedida individualmente por servidor.
+
+Veja [LICENSE.txt](LICENSE.txt) para os termos completos.
+
+---
+
+## 📩 Contato
+
+- **Discord:** `gepr13`
+- **Email:** GEPRWORKOUT@gmail.com
+
+> Licenças por servidor · Suporte técnico incluso · Configuração assistida disponível
+
+---
+
+<div align="center">
+
+*Desenvolvido por **Guilherme Elias (gepr)** · Full Stack Dev @ NemonicRP*
+
+</div>
