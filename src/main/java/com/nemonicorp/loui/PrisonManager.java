@@ -108,7 +108,7 @@ public class PrisonManager {
 
         applyVoidState(target, prison);
 
-        String pretty = formatDuration(minutes);
+        String pretty = TimeParser.formatDuration(minutes);
         String m1 = msg("jailed-target", "&cVoce foi contido pelo motivo: &f%reason% &7(%time%)")
                 .replace("%reason%", reason)
                 .replace("%time%", pretty)
@@ -243,36 +243,11 @@ public class PrisonManager {
                 : Math.max(0.0, Math.min(1.0, remaining / (double) prison.totalMs));
 
         prison.bar.setTitle(ChatColor.RED + "" + ChatColor.BOLD + prison.reason
-                + ChatColor.GRAY + " — " + ChatColor.WHITE + formatClock(remaining));
+                + ChatColor.GRAY + " — " + ChatColor.WHITE + TimeParser.formatClock(remaining));
         prison.bar.setProgress(progress);
     }
 
-    /** Relogio da bossbar: "Dd HH:MM:SS", "H:MM:SS" ou "MM:SS" conforme a duracao restante. */
-    static String formatClock(long remainingMs) {
-        long totalSec = Math.max(0L, remainingMs) / 1000L;
-        long days = totalSec / 86400L;
-        long hours = (totalSec % 86400L) / 3600L;
-        long min = (totalSec % 3600L) / 60L;
-        long sec = totalSec % 60L;
-        if (days > 0) return String.format("%dd %02d:%02d:%02d", days, hours, min, sec);
-        if (hours > 0) return String.format("%d:%02d:%02d", hours, min, sec);
-        return String.format("%02d:%02d", min, sec);
-    }
-
-    /** Texto amigavel de duracao em minutos: "2d 5h", "5h 30min", "30min". */
-    static String formatDuration(long minutes) {
-        if (minutes <= 0) return "0min";
-        long days = minutes / 1440L;
-        long hours = (minutes % 1440L) / 60L;
-        long mins = minutes % 60L;
-        StringBuilder sb = new StringBuilder();
-        if (days > 0) sb.append(days).append('d');
-        if (hours > 0) sb.append(sb.length() > 0 ? " " : "").append(hours).append('h');
-        if (mins > 0 || sb.length() == 0) sb.append(sb.length() > 0 ? " " : "").append(mins).append("min");
-        return sb.toString();
-    }
-
-    // ── Tick (1s) ──
+// ── Tick (1s) ──
 
     public void tick() {
         if (prisons.isEmpty()) return;
@@ -344,7 +319,7 @@ public class PrisonManager {
         for (Prison prison : prisons.values()) {
             long remaining = Math.max(0L, prison.endTime - System.currentTimeMillis()) / 60000L;
             sender.sendMessage(ChatColor.GRAY + "- " + ChatColor.WHITE + prison.playerName
-                    + ChatColor.GRAY + " (" + formatDuration(remaining) + " restantes): "
+                    + ChatColor.GRAY + " (" + TimeParser.formatDuration(remaining) + " restantes): "
                     + ChatColor.YELLOW + prison.reason);
         }
     }

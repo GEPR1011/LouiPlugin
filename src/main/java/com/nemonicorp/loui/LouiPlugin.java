@@ -95,9 +95,9 @@ public class LouiPlugin extends JavaPlugin {
             return true;
         }
 
-        long minutes = parseMinutes(args[1]);
+        long minutes = TimeParser.parse(args[1]);
         if (minutes <= 0) {
-            sender.sendMessage(manager.msg("usage", "&7Tempo invalido. Use minutos, ou sufixo m/d. Ex: 30m, 2d."));
+            sender.sendMessage(manager.msg("usage", "&7Tempo invalido. Use minutos, ou sufixo m/h/d. Ex: 30m, 2h, 2d."));
             return true;
         }
 
@@ -112,34 +112,7 @@ public class LouiPlugin extends JavaPlugin {
         return true;
     }
 
-    /**
-     * Converte o argumento de tempo em minutos.
-     * Aceita minutos puros ("30"), sufixo de minutos ("30m") ou de dias ("2d").
-     * Retorna -1 quando o formato e invalido ou o valor nao e positivo.
-     */
-    static long parseMinutes(String input) {
-        if (input == null || input.isEmpty()) return -1;
-        String s = input.toLowerCase();
-        long multiplier = 1L; // minutos por unidade
-        char last = s.charAt(s.length() - 1);
-        if (last == 'd') {
-            multiplier = 1440L; // 1 dia = 1440 min
-            s = s.substring(0, s.length() - 1);
-        } else if (last == 'm') {
-            multiplier = 1L;
-            s = s.substring(0, s.length() - 1);
-        }
-        if (s.isEmpty()) return -1;
-        try {
-            long value = Long.parseLong(s);
-            if (value <= 0) return -1;
-            return value * multiplier;
-        } catch (NumberFormatException ex) {
-            return -1;
-        }
-    }
-
-    @Override
+@Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         List<String> out = new ArrayList<>();
         if (!sender.hasPermission("loui.use")) return out;
