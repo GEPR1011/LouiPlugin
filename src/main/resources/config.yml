@@ -29,6 +29,7 @@ messages:
   is-exempt: '&cEsse jogador e imune ao castigo.'
   never-joined: '&cEsse jogador nunca entrou no servidor.'
   exempt-discarded: '&7%player% e imune ao castigo — punicao descartada.'
+  imprison-vetoed: '&cA punicao foi impedida por outro plugin.'
 
 safety:
   # Solta todos os presos ONLINE quando o plugin e desabilitado. Sem isso, remover

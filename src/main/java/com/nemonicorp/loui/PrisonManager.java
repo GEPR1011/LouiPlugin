@@ -1,5 +1,8 @@
 package com.nemonicorp.loui;
 
+import com.nemonicorp.loui.api.LouiImprisonEvent;
+import com.nemonicorp.loui.api.LouiReleaseEvent;
+import com.nemonicorp.loui.api.ReleaseCause;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
@@ -13,6 +16,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
+import org.bukkit.plugin.RegisteredListener;
 
 import java.io.File;
 import java.io.IOException;
@@ -95,7 +99,12 @@ public class PrisonManager {
 
     // ── Acoes principais ──
 
-    public void imprison(Player target, long minutes, String reason, String byWhom) {
+    /** Devolve false quando outro plugin vetou a punicao. */
+    public boolean imprison(Player target, long minutes, String reason, String byWhom) {
+        if (imprisonVetoed(target, target.getName(), minutes, reason, byWhom, false)) {
+            return false;
+        }
+
         UUID uuid = target.getUniqueId();
         Prison existing = prisons.get(uuid);
 
@@ -121,30 +130,28 @@ public class PrisonManager {
 
         applyVoidState(target, prison);
 
-        String pretty = TimeParser.formatDuration(minutes);
         String m1 = msg("jailed-target", "&cVoce foi contido pelo motivo: &f%reason% &7(%time%)")
                 .replace("%reason%", reason)
-                .replace("%time%", pretty)
+                .replace("%time%", TimeParser.formatDuration(minutes))
                 .replace("%minutes%", String.valueOf(minutes));
         target.sendMessage(m1);
 
-        String m2 = msg("jailed-broadcast-staff", "&7%player% foi contido por %time%: &f%reason%")
-                .replace("%player%", target.getName())
-                .replace("%time%", pretty)
-                .replace("%minutes%", String.valueOf(minutes))
-                .replace("%reason%", reason);
-        notifyStaff(m2, target.getUniqueId());
-        Bukkit.getConsoleSender().sendMessage(m2 + ChatColor.DARK_GRAY + " (por " + byWhom + ")");
-
-        plugin.getLogger().info("[LOUI] " + target.getName() + " contido por " + pretty
-                + ". Motivo: " + reason + " (por " + byWhom + ")");
+        announceImprison(target.getName(), minutes, reason, byWhom, target.getUniqueId(), false);
+        return true;
     }
 
     /**
      * Pune um jogador que nao esta online. O castigo fica registrado sem localizacao
      * de retorno; handleJoin captura a posicao de login e aplica o estado de vazio.
+     *
+     * Devolve false quando outro plugin vetou a punicao.
      */
-    public void imprisonOffline(OfflinePlayer target, long minutes, String reason, String byWhom) {
+    public boolean imprisonOffline(OfflinePlayer target, long minutes, String reason, String byWhom) {
+        String name = target.getName() == null ? "?" : target.getName();
+        if (imprisonVetoed(target, name, minutes, reason, byWhom, true)) {
+            return false;
+        }
+
         UUID uuid = target.getUniqueId();
         Prison prison = prisons.get(uuid);
         if (prison == null) {
@@ -154,7 +161,7 @@ public class PrisonManager {
             prison.returnAllowFlight = false;
         }
 
-        prison.playerName = target.getName() == null ? "?" : target.getName();
+        prison.playerName = name;
         prison.reason = reason;
         prison.totalMs = minutes * 60_000L;
         prison.endTime = System.currentTimeMillis() + prison.totalMs;
@@ -162,18 +169,8 @@ public class PrisonManager {
         prisons.put(uuid, prison);
         save();
 
-        String pretty = TimeParser.formatDuration(minutes);
-        String m = msg("jailed-broadcast-staff", "&7%player% foi contido por %time%: &f%reason%")
-                .replace("%player%", prison.playerName)
-                .replace("%time%", pretty)
-                .replace("%minutes%", String.valueOf(minutes))
-                .replace("%reason%", reason);
-
-        notifyStaff(m, null);
-        Bukkit.getConsoleSender().sendMessage(m + ChatColor.DARK_GRAY + " (por " + byWhom + ", offline)");
-
-        plugin.getLogger().info("[LOUI] " + prison.playerName + " contido offline por " + pretty
-                + ". Motivo: " + reason + " (por " + byWhom + ")");
+        announceImprison(name, minutes, reason, byWhom, null, true);
+        return true;
     }
 
     /** Envia uma mensagem a todo jogador online com a permissao de notificacao. */
@@ -183,6 +180,49 @@ public class PrisonManager {
             if (excluded != null && p.getUniqueId().equals(excluded)) continue;
             if (p.hasPermission(permission)) p.sendMessage(message);
         }
+    }
+
+    /**
+     * Dispara o LouiImprisonEvent e devolve true se algum plugin vetou.
+     *
+     * O log lista os plugins que ESCUTAM o evento, nao o que o cancelou — o
+     * Bukkit nao expoe essa informacao. Afirmar culpa que nao se pode provar
+     * mandaria o admin investigar o plugin errado.
+     */
+    private boolean imprisonVetoed(OfflinePlayer target, String targetName, long minutes,
+                                   String reason, String byWhom, boolean offline) {
+        LouiImprisonEvent event = new LouiImprisonEvent(target, minutes, reason, byWhom, offline);
+        Bukkit.getPluginManager().callEvent(event);
+        if (!event.isCancelled()) return false;
+
+        StringBuilder listeners = new StringBuilder();
+        for (RegisteredListener rl : LouiImprisonEvent.getHandlerList().getRegisteredListeners()) {
+            if (listeners.length() > 0) listeners.append(", ");
+            listeners.append(rl.getPlugin().getName());
+        }
+        String who = listeners.length() == 0 ? "nenhum" : listeners.toString();
+
+        plugin.getLogger().info("[LOUI] Punicao de " + targetName + " cancelada por um plugin. "
+                + "Plugins escutando este evento: " + who);
+        return true;
+    }
+
+    /** Monta e distribui o aviso de punicao para staff, console e log. */
+    private void announceImprison(String playerName, long minutes, String reason,
+                                  String byWhom, UUID excluded, boolean offline) {
+        String pretty = TimeParser.formatDuration(minutes);
+        String m = msg("jailed-broadcast-staff", "&7%player% foi contido por %time%: &f%reason%")
+                .replace("%player%", playerName)
+                .replace("%time%", pretty)
+                .replace("%minutes%", String.valueOf(minutes))
+                .replace("%reason%", reason);
+
+        notifyStaff(m, excluded);
+        Bukkit.getConsoleSender().sendMessage(m + ChatColor.DARK_GRAY
+                + " (por " + byWhom + (offline ? ", offline" : "") + ")");
+
+        plugin.getLogger().info("[LOUI] " + playerName + " contido" + (offline ? " offline" : "")
+                + " por " + pretty + ". Motivo: " + reason + " (por " + byWhom + ")");
     }
 
     public void freeByName(CommandSender sender, String name) {
@@ -212,12 +252,14 @@ public class PrisonManager {
 
     /** Restaura o jogador: local original, gamemode, efeitos, bossbar. */
     public void release(Player player) {
-        releaseInternal(player, true);
+        releaseInternal(player, true, ReleaseCause.MANUAL);
     }
 
-    private void releaseInternal(Player player, boolean persist) {
+    private void releaseInternal(Player player, boolean persist, ReleaseCause cause) {
         Prison prison = prisons.remove(player.getUniqueId());
         if (prison == null) return;
+
+        Bukkit.getPluginManager().callEvent(new LouiReleaseEvent(player, prison.reason, cause));
 
         if (prison.bar != null) prison.bar.removeAll();
 
@@ -288,7 +330,7 @@ public class PrisonManager {
         }
 
         for (Player p : toRelease) {
-            release(p);
+            releaseInternal(p, true, ReleaseCause.EXPIRED);
         }
     }
 
@@ -304,6 +346,8 @@ public class PrisonManager {
             prisons.remove(player.getUniqueId());
             voidState.releaseBand(prison.band);
             save();
+            Bukkit.getPluginManager().callEvent(
+                    new LouiReleaseEvent(player, prison.reason, ReleaseCause.EXEMPT));
             notifyStaff(msg("exempt-discarded", "&7%player% e imune ao castigo — punicao descartada.")
                     .replace("%player%", player.getName()), player.getUniqueId());
             return;
@@ -316,8 +360,10 @@ public class PrisonManager {
                 prisons.remove(player.getUniqueId());
                 voidState.releaseBand(prison.band);
                 save();
+                Bukkit.getPluginManager().callEvent(
+                        new LouiReleaseEvent(player, prison.reason, ReleaseCause.EXPIRED));
             } else {
-                release(player);
+                releaseInternal(player, true, ReleaseCause.EXPIRED);
             }
             return;
         }
@@ -439,7 +485,7 @@ public class PrisonManager {
                 if (p != null && p.isOnline()) online.add(p);
             }
             for (Player p : online) {
-                releaseInternal(p, false);
+                releaseInternal(p, false, ReleaseCause.SHUTDOWN);
             }
             if (!online.isEmpty()) {
                 plugin.getLogger().info("[LOUI] " + online.size() + " preso(s) solto(s) no desligamento.");

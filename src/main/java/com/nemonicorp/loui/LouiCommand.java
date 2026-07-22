@@ -70,7 +70,10 @@ public class LouiCommand implements CommandExecutor, TabCompleter {
                 sender.sendMessage(manager.msg("is-exempt", "&cEsse jogador e imune ao castigo."));
                 return true;
             }
-            manager.imprison(target, minutes, reason, sender.getName());
+            if (!manager.imprison(target, minutes, reason, sender.getName())) {
+                sender.sendMessage(manager.msg("imprison-vetoed",
+                        "&cA punicao foi impedida por outro plugin."));
+            }
             return true;
         }
 
@@ -82,7 +85,10 @@ public class LouiCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        manager.imprisonOffline(offline, minutes, reason, sender.getName());
+        if (!manager.imprisonOffline(offline, minutes, reason, sender.getName())) {
+            sender.sendMessage(manager.msg("imprison-vetoed",
+                    "&cA punicao foi impedida por outro plugin."));
+        }
         return true;
     }
 
