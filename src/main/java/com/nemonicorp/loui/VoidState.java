@@ -22,7 +22,7 @@ import java.util.UUID;
 public class VoidState {
 
     private final LouiPlugin plugin;
-    private final Set<Integer> usedBands = new HashSet<>();
+    private final BandPool bands = new BandPool();
     /** Teleportes feitos pelo proprio plugin (pra nao serem cancelados pelo listener). */
     private final Set<UUID> internalTeleport = new HashSet<>();
 
@@ -35,18 +35,15 @@ public class VoidState {
     /** Menor faixa livre. Com o pool esgotado, devolve a ultima (presos passam a dividi-la). */
     public int allocateBand() {
         int max = Math.max(1, plugin.getConfig().getInt("void.max-bands", 8));
-        for (int i = 0; i < max; i++) {
-            if (usedBands.add(i)) return i;
-        }
-        return max - 1;
+        return bands.allocate(max);
     }
 
     public void reserveBand(int band) {
-        if (band >= 0) usedBands.add(band);
+        bands.reserve(band);
     }
 
     public void releaseBand(int band) {
-        usedBands.remove(band);
+        bands.release(band);
     }
 
     /** Distancia entre o topo de uma faixa e o topo da seguinte. */
