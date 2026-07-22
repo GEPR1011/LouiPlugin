@@ -4,7 +4,7 @@
 
 ### Castigo no vazio para jogadores mal-intencionados
 
-[![Version](https://img.shields.io/badge/versão-v1.0.0-gold?style=for-the-badge&logo=minecraft&logoColor=white)](../../releases)
+[![Version](https://img.shields.io/badge/versão-v1.1.0-gold?style=for-the-badge&logo=minecraft&logoColor=white)](../../releases)
 [![Server](https://img.shields.io/badge/servidor-NemonicRP-purple?style=for-the-badge)](.)
 [![API](https://img.shields.io/badge/Paper%20%2F%20Spigot-1.21+-green?style=for-the-badge&logo=java)](.)
 [![Java](https://img.shields.io/badge/Java-21+-orange?style=for-the-badge&logo=openjdk)](.)
@@ -47,6 +47,12 @@ Cumprido o castigo, o jogador retorna **exatamente** ao lugar e ao modo de jogo 
 
 Todos exigem a permissão `loui.use` (padrão: **op**).
 
+| Permissão | Padrão | Para quê |
+|---|---|---|
+| `loui.use` | op | Usar `/loui` |
+| `loui.exempt` | — | Imunidade: o jogador não pode ser contido |
+| `loui.notify` | op | Recebe aviso quando alguém é contido |
+
 | Comando | O que faz |
 |---|---|
 | `/loui <nick> <tempo> <motivo...>` | Envia o jogador para o vazio pelo tempo indicado |
@@ -59,6 +65,7 @@ Todos exigem a permissão `loui.use` (padrão: **op**).
 |:---:|---|
 | `30` | 30 minutos (número puro) |
 | `30m` | 30 minutos |
+| `2h` | 2 horas |
 | `2d` | 2 dias (2880 minutos) |
 
 ```
@@ -89,6 +96,14 @@ Todos exigem a permissão `loui.use` (padrão: **op**).
 
 Ao ser libertado, tudo é revertido: efeitos removidos, invulnerabilidade desligada, gamemode e voo restaurados, e teleporte de volta ao ponto exato de origem.
 
+> ⚠️ **Antes de desinstalar o plugin**, rode `/loui list` e solte todos. O
+> `release-all-on-disable` alcança apenas quem está **online** — o estado de um
+> preso offline (cegueira, invulnerabilidade, posição) fica gravado no playerdata
+> e, sem o plugin carregado, não há código capaz de desfazê-lo.
+
+> ⚠️ A whitelist de comandos não resolve aliases. Liberar `/msg` não libera
+> `/tell` — ambos precisam constar na lista.
+
 ---
 
 ## ⚙️ Configuração
@@ -102,6 +117,8 @@ void:
   z: 250000.5
   top-y: 5000.0      # altura em que a queda começa
   min-y: 1500.0      # ao cruzar essa altura, volta pro topo
+  band-gap: 100.0    # espaco morto entre faixas de presos
+  max-bands: 8       # teto de faixas distintas
 
 bossbar:
   color: RED         # RED, BLUE, GREEN, PINK, PURPLE, WHITE, YELLOW
@@ -113,6 +130,15 @@ messages:
   released: '&aVoce foi libertado. Comporte-se.'
   no-commands: '&cVoce nao pode usar comandos enquanto estiver contido.'
   # ...
+
+safety:
+  release-all-on-disable: true   # solta presos ONLINE ao desabilitar o plugin
+
+restrictions:
+  allowed-commands: []           # comandos liberados ao preso; vazio bloqueia tudo
+
+notify:
+  permission: loui.notify        # quem recebe o aviso de punicao
 ```
 
 **Placeholders disponíveis nas mensagens:** `%player%`, `%reason%`, `%time%`, `%minutes%`.
