@@ -152,6 +152,10 @@ public class PrisonManager {
 
     /** Restaura o jogador: local original, gamemode, efeitos, bossbar. */
     public void release(Player player) {
+        releaseInternal(player, true);
+    }
+
+    private void releaseInternal(Player player, boolean persist) {
         Prison prison = prisons.remove(player.getUniqueId());
         if (prison == null) return;
 
@@ -161,7 +165,7 @@ public class PrisonManager {
         voidState.releaseBand(prison.band);
 
         player.sendMessage(msg("released", "&aVoce foi libertado. Comporte-se."));
-        save();
+        if (persist) save();
 
         plugin.getLogger().info("[LOUI] " + player.getName() + " libertado.");
     }
@@ -340,6 +344,21 @@ public class PrisonManager {
     }
 
     public void shutdown() {
+        if (plugin.getConfig().getBoolean("safety.release-all-on-disable", true)) {
+            // Coletar antes de soltar: releaseInternal modifica o mapa.
+            List<Player> online = new ArrayList<>();
+            for (UUID uuid : prisons.keySet()) {
+                Player p = Bukkit.getPlayer(uuid);
+                if (p != null && p.isOnline()) online.add(p);
+            }
+            for (Player p : online) {
+                releaseInternal(p, false);
+            }
+            if (!online.isEmpty()) {
+                plugin.getLogger().info("[LOUI] " + online.size() + " preso(s) solto(s) no desligamento.");
+            }
+        }
+
         for (Prison p : prisons.values()) {
             if (p.bar != null) p.bar.removeAll();
         }
