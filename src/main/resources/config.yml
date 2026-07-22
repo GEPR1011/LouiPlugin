@@ -1,4 +1,9 @@
 # LouiPlugin — config
+
+# Qual castigo o servidor usa: void (queda no vazio) ou jail (regiao fisica).
+# Castigos ja aplicados guardam o proprio modo e nao mudam quando esta chave muda.
+mode: void
+
 void:
   # Mundo do vazio (vazio = mundo principal)
   world: ''
@@ -12,6 +17,27 @@ void:
   # ocuparem o mesmo ponto. A altura de queda de cada faixa e (top-y - min-y).
   band-gap: 100.0
   max-bands: 8
+  effects:
+    darkness: true
+    blindness: true
+    invulnerable: true
+    adventure-mode: true
+
+jail:
+  # Use /loui setjail pra gravar world/x/y/z de onde voce esta.
+  world: ''
+  x: 0.0
+  y: 64.0
+  z: 0.0
+  # Raio horizontal. Zero desativa a jail e o comando recusa aplicar.
+  radius: 20.0
+  effects:
+    # Na jail a escuridao vem desligada: o castigo e ficar preso a vista de
+    # todos, nao ficar cego.
+    darkness: false
+    blindness: false
+    invulnerable: true
+    adventure-mode: true
 
 bossbar:
   # Cores: RED, BLUE, GREEN, PINK, PURPLE, WHITE, YELLOW
@@ -33,6 +59,12 @@ messages:
   # Texto de %loui_jailed% (PlaceholderAPI)
   placeholder-yes: 'sim'
   placeholder-no: 'nao'
+  players-only: '&cSo um jogador pode usar isso.'
+  jail-set: '&aJail definida onde voce esta.'
+  jail-not-configured: '&cA jail nao foi configurada. Use /loui setjail e defina um raio.'
+  # Texto de %loui_tag%. Sem codigo de cor, herda o formato de quem exibe
+  # (gradiente do TAB, fonte do ItemsAdder). Glyphs :nome: passam intactos.
+  tab-tag: '&c[APRISIONADO] '
 
 safety:
   # Solta todos os presos ONLINE quando o plugin e desabilitado. Sem isso, remover

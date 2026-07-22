@@ -1,4 +1,4 @@
-package com.nemonicorp.loui;
+package com.nemonicorp.loui.mode;
 
 import java.util.HashMap;
 import java.util.Map;

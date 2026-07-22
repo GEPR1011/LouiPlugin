@@ -37,6 +37,20 @@ public class LouiCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
+        if (args[0].equalsIgnoreCase("setjail")) {
+            if (!sender.hasPermission("loui.admin")) {
+                sender.sendMessage(manager.msg("no-permission", "&cSem permissao."));
+                return true;
+            }
+            if (!(sender instanceof Player p)) {
+                sender.sendMessage(manager.msg("players-only", "&cSo um jogador pode usar isso."));
+                return true;
+            }
+            manager.setJailHere(p);
+            sender.sendMessage(manager.msg("jail-set", "&aJail definida onde voce esta."));
+            return true;
+        }
+
         if (args[0].equalsIgnoreCase("free")) {
             if (args.length < 2) {
                 sender.sendMessage(manager.msg("usage", "&7Uso: /loui free <nick>"));
@@ -63,6 +77,12 @@ public class LouiCommand implements CommandExecutor, TabCompleter {
             sb.append(args[i]);
         }
         String reason = sb.toString();
+
+        if (!manager.activeMode().isConfigured()) {
+            sender.sendMessage(manager.msg("jail-not-configured",
+                    "&cA jail nao foi configurada. Use /loui setjail e defina um raio."));
+            return true;
+        }
 
         Player target = Bukkit.getPlayerExact(args[0]);
         if (target != null) {
@@ -101,6 +121,7 @@ public class LouiCommand implements CommandExecutor, TabCompleter {
             String a = args[0].toLowerCase();
             if ("free".startsWith(a)) out.add("free");
             if ("list".startsWith(a)) out.add("list");
+            if ("setjail".startsWith(a) && sender.hasPermission("loui.admin")) out.add("setjail");
             for (Player p : Bukkit.getOnlinePlayers()) {
                 if (p.getName().toLowerCase().startsWith(a)) out.add(p.getName());
             }

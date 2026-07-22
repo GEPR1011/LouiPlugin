@@ -4,7 +4,7 @@
 
 ### Castigo no vazio para jogadores mal-intencionados
 
-[![Version](https://img.shields.io/badge/versão-v1.2.0-gold?style=for-the-badge&logo=minecraft&logoColor=white)](../../releases)
+[![Version](https://img.shields.io/badge/versão-v1.3.0-gold?style=for-the-badge&logo=minecraft&logoColor=white)](../../releases)
 [![Server](https://img.shields.io/badge/servidor-NemonicRP-purple?style=for-the-badge)](.)
 [![API](https://img.shields.io/badge/Paper%20%2F%20Spigot-1.21+-green?style=for-the-badge&logo=java)](.)
 [![Java](https://img.shields.io/badge/Java-21+-orange?style=for-the-badge&logo=openjdk)](.)
@@ -55,12 +55,14 @@ Todos exigem a permissão `loui.use` (padrão: **op**).
 | `loui.use` | op | Usar `/loui` |
 | `loui.exempt` | — | Imunidade: o jogador não pode ser contido |
 | `loui.notify` | op | Recebe aviso quando alguém é contido |
+| `loui.admin` | op | Configurar a jail com `/loui setjail` |
 
 | Comando | O que faz |
 |---|---|
 | `/loui <nick> <tempo> <motivo...>` | Envia o jogador para o vazio pelo tempo indicado |
 | `/loui free <nick>` | Liberta antes da hora |
 | `/loui list` | Lista todos os jogadores contidos |
+| `/loui setjail` | Define o centro da jail onde você está |
 
 ### Formatos de tempo aceitos
 
@@ -106,6 +108,42 @@ Ao ser libertado, tudo é revertido: efeitos removidos, invulnerabilidade deslig
 
 > ⚠️ A whitelist de comandos não resolve aliases. Liberar `/msg` não libera
 > `/tell` — ambos precisam constar na lista.
+
+---
+
+## 🏛️ Modos de castigo
+
+O servidor escolhe um modo em `config.yml`. Castigos já aplicados guardam o próprio modo e não mudam quando a chave muda.
+
+| Modo | O que é |
+|---|---|
+| `void` | Queda infinita num vazio escuro. É o padrão. |
+| `jail` | Região física delimitada, onde o preso anda e é visto. |
+
+### Configurando a jail
+
+1. Vá até onde a jail deve ficar
+2. `/loui setjail` (exige `loui.admin`)
+3. Ajuste `jail.radius` no `config.yml`
+4. Troque `mode` para `jail` e reinicie
+
+> ⚠️ A contenção é **horizontal**: o raio ignora a altura. Se o Y contasse, uma
+> jail rasa expulsaria quem pulasse. Teto e piso são responsabilidade de quem
+> constrói a jail.
+
+### Efeitos por modo
+
+Cada modo tem seu perfil. O padrão do `void` reproduz o castigo clássico; o da `jail` deixa o preso enxergar, porque o castigo ali é ficar preso à vista de todos.
+
+| Efeito | `void` | `jail` |
+|---|:---:|:---:|
+| `darkness` | ✅ | ❌ |
+| `blindness` | ✅ | ❌ |
+| `invulnerable` | ✅ | ✅ |
+| `adventure-mode` | ✅ | ✅ |
+
+> Com `invulnerable: false` o preso pode morrer. Ao respawnar ele é recolocado
+> sob castigo — morrer não é fuga.
 
 ---
 
@@ -201,8 +239,20 @@ Opcional. Se a PlaceholderAPI estiver instalada, quatro placeholders ficam dispo
 | `%loui_time_left%` | `2:00:00` | vazio |
 | `%loui_reason%` | O motivo | vazio |
 | `%loui_count%` | Total de presos | o número real |
+| `%loui_tag%` | O texto de `tab-tag` | vazio |
 
 > `%loui_time_left%` devolve string vazia — e não `00:00` — para quem não está contido, permitindo esconder o campo no scoreboard.
+
+O `%loui_tag%` existe para **somar** ao seu sistema de tab, não para competir com ele. O plugin nunca escreve na tab list, no nametag ou em scoreboards — apenas publica o estado, e quem desenha decide o resto.
+
+```yaml
+tab-tag: '&c[APRISIONADO] '        # cor própria
+tab-tag: '[APRISIONADO] '          # herda o gradiente/fonte de quem exibe
+tab-tag: ':icone_cadeia: '         # glyph do ItemsAdder, passa intacto
+tab-tag: ''                        # desliga sem tocar em código
+```
+
+No TAB: `tabprefix: "%loui_tag%%player%"`.
 
 ---
 
@@ -250,8 +300,7 @@ LouiPlugin/
 │   ├── PrisonManager.java                   # estado, persistência, bossbar
 │   ├── LouiPlaceholders.java                # expansao PlaceholderAPI (opcional)
 │   ├── api/                                 # superfície pública: eventos e enum
-│   ├── VoidState.java                       # teleporte, efeitos, faixas de altura
-│   ├── BandPool.java                        # ocupação das faixas
+│   ├── mode/                                # PunishmentMode, VoidMode, JailMode, EffectProfile
 │   └── TimeParser.java                      # parse e formatação de durações
 ├── src/main/resources/
 │   ├── plugin.yml                           # metadados, comando e permissões
