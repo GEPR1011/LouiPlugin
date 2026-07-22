@@ -212,12 +212,14 @@ soltar todo mundo.
 1. `Bukkit.getPlayerExact(nome)` — se online, fluxo atual, sem mudança.
 2. Se nulo, consulta o **usercache do servidor**, sem chamada de rede.
 
-A consulta ao usercache não pode bloquear a thread principal. A API pretendida é
+A consulta ao usercache não pode bloquear a thread principal. A API usada é
 `Bukkit.getOfflinePlayerIfCached(String)`, que devolve `null` sem consultar a
-Mojang. **A existência e a assinatura desse método na paper-api 1.21.4 precisam
-ser confirmadas na implementação**; se não existir, a alternativa é
-`Bukkit.getOfflinePlayer(UUID)` alimentado por uma varredura de
-`Bukkit.getOfflinePlayers()`, que lê apenas o cache local.
+Mojang.
+
+**Confirmado em 2026-07-21** por inspeção do jar
+`paper-api-1.21.4-R0.1-20250925.065901-231.jar` com `javap`: o método existe em
+`org.bukkit.Bukkit` e em `org.bukkit.Server` com a assinatura
+`OfflinePlayer getOfflinePlayerIfCached(String)`.
 
 Nunca usar `Bukkit.getOfflinePlayer(String)`: em servidor online-mode ele
 dispara uma consulta HTTP à Mojang na thread principal e trava o servidor.
@@ -332,7 +334,8 @@ não vai fingir cobertura automatizada que não existe:
 
 | Risco | Mitigação |
 |---|---|
-| `getOfflinePlayerIfCached` pode não existir na paper-api 1.21.4 | Confirmar na implementação; alternativa já definida na seção 6 |
+| ~~`getOfflinePlayerIfCached` pode não existir na paper-api 1.21.4~~ | **Resolvido em 2026-07-21**: confirmado por `javap` no jar da dependência |
+| Punição offline curta pode expirar antes do primeiro login | `handleJoin` descarta o registro sem teleportar; o jogador não é jogado no spawn por uma pena que nunca começou |
 | `release()` dentro de iteração do mapa causaria `ConcurrentModificationException` | Coletar antes, soltar depois — padrão que o `tick()` já usa |
 | Faixas muito profundas em mundos com limite alterado | Faixa é espaço vazio; jogador invulnerável e reposicionado pelo tick |
 | Regressão em quem atualiza da v1.0.0 | Faixa 0 é idêntica ao comportamento atual; whitelist vazia preserva bloqueio total |
