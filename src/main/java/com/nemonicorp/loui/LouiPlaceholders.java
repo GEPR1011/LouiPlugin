@@ -56,6 +56,12 @@ public class LouiPlaceholders extends PlaceholderExpansion {
                     : plugin.getConfig().getString("messages.placeholder-no", "nao");
         }
 
+        if ("tag".equalsIgnoreCase(params)) {
+            if (!jailed) return "";
+            return org.bukkit.ChatColor.translateAlternateColorCodes('&',
+                    plugin.getConfig().getString("messages.tab-tag", "&c[APRISIONADO] "));
+        }
+
         // Vazio (e nao "00:00") pra quem nao esta contido: permite esconder o
         // campo no scoreboard em vez de obrigar o admin a tratar o zero.
         if (!jailed) return "";

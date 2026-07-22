@@ -62,6 +62,9 @@ messages:
   players-only: '&cSo um jogador pode usar isso.'
   jail-set: '&aJail definida onde voce esta.'
   jail-not-configured: '&cA jail nao foi configurada. Use /loui setjail e defina um raio.'
+  # Texto de %loui_tag%. Sem codigo de cor, herda o formato de quem exibe
+  # (gradiente do TAB, fonte do ItemsAdder). Glyphs :nome: passam intactos.
+  tab-tag: '&c[APRISIONADO] '
 
 safety:
   # Solta todos os presos ONLINE quando o plugin e desabilitado. Sem isso, remover
