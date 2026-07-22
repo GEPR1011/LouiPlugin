@@ -24,3 +24,7 @@ desktop.ini
 # Runtime do servidor
 prisons.yml
 logs/
+
+# Andaimes de agente — nao versionar
+.superpowers/
+docs/superpowers/

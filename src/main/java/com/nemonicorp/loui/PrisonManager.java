@@ -1,9 +1,13 @@
 package com.nemonicorp.loui;
 
+import com.nemonicorp.loui.api.LouiImprisonEvent;
+import com.nemonicorp.loui.api.LouiReleaseEvent;
+import com.nemonicorp.loui.api.ReleaseCause;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.World;
 import org.bukkit.boss.BarColor;
 import org.bukkit.boss.BarStyle;
@@ -12,17 +16,14 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
-import org.bukkit.potion.PotionEffect;
-import org.bukkit.potion.PotionEffectType;
+import org.bukkit.plugin.RegisteredListener;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -39,16 +40,17 @@ public class PrisonManager {
         long endTime;     // epoch ms
         long totalMs;
         String reason;
+        int band = -1;    // faixa de altura ocupada; -1 = nao atribuida
         transient BossBar bar;
     }
 
     private final LouiPlugin plugin;
     private final Map<UUID, Prison> prisons = new HashMap<>();
-    /** Teleportes feitos pelo proprio plugin (pra nao serem cancelados pelo listener). */
-    private final Set<UUID> internalTeleport = new HashSet<>();
+    private final VoidState voidState;
 
     public PrisonManager(LouiPlugin plugin) {
         this.plugin = plugin;
+        this.voidState = new VoidState(plugin);
     }
 
     // ── Mensagens ──
@@ -71,7 +73,22 @@ public class PrisonManager {
     }
 
     public boolean isInternalTeleport(UUID uuid) {
-        return internalTeleport.contains(uuid);
+        return voidState.isInternalTeleport(uuid);
+    }
+
+    /**
+     * Whitelist de comandos permitidos durante o castigo. Lista vazia bloqueia tudo.
+     * Aliases nao sao resolvidos: liberar /msg nao libera /tell.
+     */
+    public boolean isCommandAllowed(String rawMessage) {
+        List<String> allowed = plugin.getConfig().getStringList("restrictions.allowed-commands");
+        if (allowed.isEmpty()) return false;
+
+        String root = LouiListener.commandRoot(rawMessage);
+        for (String entry : allowed) {
+            if (LouiListener.commandRoot(entry).equals(root)) return true;
+        }
+        return false;
     }
 
     public List<String> getPrisonerNames() {
@@ -80,9 +97,32 @@ public class PrisonManager {
         return names;
     }
 
+    /** Quantos castigos existem, incluindo os de jogadores offline. */
+    public int getPrisonerCount() {
+        return prisons.size();
+    }
+
+    /** Milissegundos restantes do castigo, ou 0 se o jogador nao estiver contido. */
+    public long getRemainingMillis(UUID uuid) {
+        Prison prison = prisons.get(uuid);
+        if (prison == null) return 0L;
+        return Math.max(0L, prison.endTime - System.currentTimeMillis());
+    }
+
+    /** Motivo do castigo, ou string vazia se o jogador nao estiver contido. */
+    public String getReason(UUID uuid) {
+        Prison prison = prisons.get(uuid);
+        return prison == null ? "" : prison.reason;
+    }
+
     // ── Acoes principais ──
 
-    public void imprison(Player target, long minutes, String reason, String byWhom) {
+    /** Devolve false quando outro plugin vetou a punicao. */
+    public boolean imprison(Player target, long minutes, String reason, String byWhom) {
+        if (imprisonVetoed(target, target.getName(), minutes, reason, byWhom, false)) {
+            return false;
+        }
+
         UUID uuid = target.getUniqueId();
         Prison existing = prisons.get(uuid);
 
@@ -108,24 +148,99 @@ public class PrisonManager {
 
         applyVoidState(target, prison);
 
-        String pretty = formatDuration(minutes);
         String m1 = msg("jailed-target", "&cVoce foi contido pelo motivo: &f%reason% &7(%time%)")
                 .replace("%reason%", reason)
-                .replace("%time%", pretty)
+                .replace("%time%", TimeParser.formatDuration(minutes))
                 .replace("%minutes%", String.valueOf(minutes));
         target.sendMessage(m1);
 
-        String m2 = msg("jailed-broadcast-staff", "&7%player% foi contido por %time%: &f%reason%")
-                .replace("%player%", target.getName())
+        announceImprison(target.getName(), minutes, reason, byWhom, target.getUniqueId(), false);
+        return true;
+    }
+
+    /**
+     * Pune um jogador que nao esta online. O castigo fica registrado sem localizacao
+     * de retorno; handleJoin captura a posicao de login e aplica o estado de vazio.
+     *
+     * Devolve false quando outro plugin vetou a punicao.
+     */
+    public boolean imprisonOffline(OfflinePlayer target, long minutes, String reason, String byWhom) {
+        String name = target.getName() == null ? "?" : target.getName();
+        if (imprisonVetoed(target, name, minutes, reason, byWhom, true)) {
+            return false;
+        }
+
+        UUID uuid = target.getUniqueId();
+        Prison prison = prisons.get(uuid);
+        if (prison == null) {
+            prison = new Prison();
+            prison.returnLocation = null;      // capturada no primeiro login
+            prison.returnGameMode = null;      // idem
+            prison.returnAllowFlight = false;
+        }
+
+        prison.playerName = name;
+        prison.reason = reason;
+        prison.totalMs = minutes * 60_000L;
+        prison.endTime = System.currentTimeMillis() + prison.totalMs;
+
+        prisons.put(uuid, prison);
+        save();
+
+        announceImprison(name, minutes, reason, byWhom, null, true);
+        return true;
+    }
+
+    /** Envia uma mensagem a todo jogador online com a permissao de notificacao. */
+    public void notifyStaff(String message, UUID excluded) {
+        String permission = plugin.getConfig().getString("notify.permission", "loui.notify");
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            if (excluded != null && p.getUniqueId().equals(excluded)) continue;
+            if (p.hasPermission(permission)) p.sendMessage(message);
+        }
+    }
+
+    /**
+     * Dispara o LouiImprisonEvent e devolve true se algum plugin vetou.
+     *
+     * O log lista os plugins que ESCUTAM o evento, nao o que o cancelou — o
+     * Bukkit nao expoe essa informacao. Afirmar culpa que nao se pode provar
+     * mandaria o admin investigar o plugin errado.
+     */
+    private boolean imprisonVetoed(OfflinePlayer target, String targetName, long minutes,
+                                   String reason, String byWhom, boolean offline) {
+        LouiImprisonEvent event = new LouiImprisonEvent(target, minutes, reason, byWhom, offline);
+        Bukkit.getPluginManager().callEvent(event);
+        if (!event.isCancelled()) return false;
+
+        StringBuilder listeners = new StringBuilder();
+        for (RegisteredListener rl : LouiImprisonEvent.getHandlerList().getRegisteredListeners()) {
+            if (listeners.length() > 0) listeners.append(", ");
+            listeners.append(rl.getPlugin().getName());
+        }
+        String who = listeners.length() == 0 ? "nenhum" : listeners.toString();
+
+        plugin.getLogger().info("[LOUI] Punicao de " + targetName + " cancelada por um plugin. "
+                + "Plugins escutando este evento: " + who);
+        return true;
+    }
+
+    /** Monta e distribui o aviso de punicao para staff, console e log. */
+    private void announceImprison(String playerName, long minutes, String reason,
+                                  String byWhom, UUID excluded, boolean offline) {
+        String pretty = TimeParser.formatDuration(minutes);
+        String m = msg("jailed-broadcast-staff", "&7%player% foi contido por %time%: &f%reason%")
+                .replace("%player%", playerName)
                 .replace("%time%", pretty)
                 .replace("%minutes%", String.valueOf(minutes))
                 .replace("%reason%", reason);
-        Player executor = Bukkit.getPlayerExact(byWhom);
-        if (executor != null) executor.sendMessage(m2);
-        Bukkit.getConsoleSender().sendMessage(m2 + ChatColor.DARK_GRAY + " (por " + byWhom + ")");
 
-        plugin.getLogger().info("[LOUI] " + target.getName() + " contido por " + pretty
-                + ". Motivo: " + reason + " (por " + byWhom + ")");
+        notifyStaff(m, excluded);
+        Bukkit.getConsoleSender().sendMessage(m + ChatColor.DARK_GRAY
+                + " (por " + byWhom + (offline ? ", offline" : "") + ")");
+
+        plugin.getLogger().info("[LOUI] " + playerName + " contido" + (offline ? " offline" : "")
+                + " por " + pretty + ". Motivo: " + reason + " (por " + byWhom + ")");
     }
 
     public void freeByName(CommandSender sender, String name) {
@@ -155,51 +270,29 @@ public class PrisonManager {
 
     /** Restaura o jogador: local original, gamemode, efeitos, bossbar. */
     public void release(Player player) {
+        releaseInternal(player, true, ReleaseCause.MANUAL);
+    }
+
+    private void releaseInternal(Player player, boolean persist, ReleaseCause cause) {
         Prison prison = prisons.remove(player.getUniqueId());
         if (prison == null) return;
 
+        Bukkit.getPluginManager().callEvent(new LouiReleaseEvent(player, prison.reason, cause));
+
         if (prison.bar != null) prison.bar.removeAll();
 
-        player.removePotionEffect(PotionEffectType.DARKNESS);
-        player.removePotionEffect(PotionEffectType.BLINDNESS);
-        player.setInvulnerable(false);
-        player.setFallDistance(0f);
-
-        internalTeleport.add(player.getUniqueId());
-        try {
-            Location ret = prison.returnLocation;
-            if (ret != null && ret.getWorld() != null) {
-                player.teleport(ret);
-            } else {
-                player.teleport(player.getWorld().getSpawnLocation());
-            }
-        } finally {
-            internalTeleport.remove(player.getUniqueId());
-        }
-
-        player.setFallDistance(0f);
-        if (prison.returnGameMode != null) player.setGameMode(prison.returnGameMode);
-        player.setAllowFlight(prison.returnAllowFlight);
+        voidState.restore(player, prison.returnLocation, prison.returnGameMode, prison.returnAllowFlight);
+        voidState.releaseBand(prison.band);
 
         player.sendMessage(msg("released", "&aVoce foi libertado. Comporte-se."));
-        save();
+        if (persist) save();
 
         plugin.getLogger().info("[LOUI] " + player.getName() + " libertado.");
     }
 
-    /** Aplica o estado de vazio: tp, queda, escuridao, invulneravel, bossbar. */
+    /** Aplica o estado de vazio e monta a bossbar. */
     private void applyVoidState(Player player, Prison prison) {
-        player.setGameMode(GameMode.ADVENTURE);
-        player.setAllowFlight(false);
-        player.setInvulnerable(true);
-        player.setFallDistance(0f);
-
-        teleportToVoidTop(player);
-
-        player.addPotionEffect(new PotionEffect(PotionEffectType.DARKNESS,
-                PotionEffect.INFINITE_DURATION, 0, true, false));
-        player.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS,
-                PotionEffect.INFINITE_DURATION, 0, true, false));
+        voidState.apply(player, prison);
 
         if (prison.bar == null) {
             BarColor color;
@@ -214,28 +307,6 @@ public class PrisonManager {
         updateBar(prison);
     }
 
-    private World voidWorld() {
-        String name = plugin.getConfig().getString("void.world", "");
-        World w = (name == null || name.isEmpty()) ? null : Bukkit.getWorld(name);
-        if (w == null) w = Bukkit.getWorlds().get(0);
-        return w;
-    }
-
-    private void teleportToVoidTop(Player player) {
-        double x = plugin.getConfig().getDouble("void.x", 250000.5);
-        double z = plugin.getConfig().getDouble("void.z", 250000.5);
-        double topY = plugin.getConfig().getDouble("void.top-y", 5000.0);
-
-        Location loc = new Location(voidWorld(), x, topY, z);
-        internalTeleport.add(player.getUniqueId());
-        try {
-            player.teleport(loc);
-        } finally {
-            internalTeleport.remove(player.getUniqueId());
-        }
-        player.setFallDistance(0f);
-    }
-
     private void updateBar(Prison prison) {
         if (prison.bar == null) return;
         long remaining = Math.max(0L, prison.endTime - System.currentTimeMillis());
@@ -243,33 +314,8 @@ public class PrisonManager {
                 : Math.max(0.0, Math.min(1.0, remaining / (double) prison.totalMs));
 
         prison.bar.setTitle(ChatColor.RED + "" + ChatColor.BOLD + prison.reason
-                + ChatColor.GRAY + " — " + ChatColor.WHITE + formatClock(remaining));
+                + ChatColor.GRAY + " — " + ChatColor.WHITE + TimeParser.formatClock(remaining));
         prison.bar.setProgress(progress);
-    }
-
-    /** Relogio da bossbar: "Dd HH:MM:SS", "H:MM:SS" ou "MM:SS" conforme a duracao restante. */
-    static String formatClock(long remainingMs) {
-        long totalSec = Math.max(0L, remainingMs) / 1000L;
-        long days = totalSec / 86400L;
-        long hours = (totalSec % 86400L) / 3600L;
-        long min = (totalSec % 3600L) / 60L;
-        long sec = totalSec % 60L;
-        if (days > 0) return String.format("%dd %02d:%02d:%02d", days, hours, min, sec);
-        if (hours > 0) return String.format("%d:%02d:%02d", hours, min, sec);
-        return String.format("%02d:%02d", min, sec);
-    }
-
-    /** Texto amigavel de duracao em minutos: "2d 5h", "5h 30min", "30min". */
-    static String formatDuration(long minutes) {
-        if (minutes <= 0) return "0min";
-        long days = minutes / 1440L;
-        long hours = (minutes % 1440L) / 60L;
-        long mins = minutes % 60L;
-        StringBuilder sb = new StringBuilder();
-        if (days > 0) sb.append(days).append('d');
-        if (hours > 0) sb.append(sb.length() > 0 ? " " : "").append(hours).append('h');
-        if (mins > 0 || sb.length() == 0) sb.append(sb.length() > 0 ? " " : "").append(mins).append("min");
-        return sb.toString();
     }
 
     // ── Tick (1s) ──
@@ -277,7 +323,6 @@ public class PrisonManager {
     public void tick() {
         if (prisons.isEmpty()) return;
 
-        double minY = plugin.getConfig().getDouble("void.min-y", 1500.0);
         List<Player> toRelease = new ArrayList<>();
 
         for (Map.Entry<UUID, Prison> e : prisons.entrySet()) {
@@ -290,27 +335,20 @@ public class PrisonManager {
                 continue;
             }
 
-            // Loop de queda infinita
-            if (player.getLocation().getY() < minY) {
-                teleportToVoidTop(player);
+            // Loop de queda infinita, dentro da faixa do preso
+            if (player.getLocation().getY() < voidState.bandFloor(prison.band)) {
+                voidState.teleportToTop(player, prison.band);
             }
 
             // Garantias (caso outro plugin tenha mexido)
             if (!player.isInvulnerable()) player.setInvulnerable(true);
-            if (!player.hasPotionEffect(PotionEffectType.DARKNESS)) {
-                player.addPotionEffect(new PotionEffect(PotionEffectType.DARKNESS,
-                        PotionEffect.INFINITE_DURATION, 0, true, false));
-            }
-            if (!player.hasPotionEffect(PotionEffectType.BLINDNESS)) {
-                player.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS,
-                        PotionEffect.INFINITE_DURATION, 0, true, false));
-            }
+            voidState.applyEffects(player);
 
             updateBar(prison);
         }
 
         for (Player p : toRelease) {
-            release(p);
+            releaseInternal(p, true, ReleaseCause.EXPIRED);
         }
     }
 
@@ -320,13 +358,44 @@ public class PrisonManager {
         Prison prison = prisons.get(player.getUniqueId());
         if (prison == null) return;
 
-        if (System.currentTimeMillis() >= prison.endTime) {
-            // Expirou (ou foi libertado) enquanto estava offline
-            release(player);
-        } else {
-            prison.playerName = player.getName();
-            applyVoidState(player, prison);
+        // Imunidade so e consultavel com o jogador online. Sem esta checagem, daria
+        // pra contornar loui.exempt punindo um admin enquanto ele estivesse fora.
+        if (player.hasPermission("loui.exempt")) {
+            prisons.remove(player.getUniqueId());
+            voidState.releaseBand(prison.band);
+            save();
+            Bukkit.getPluginManager().callEvent(
+                    new LouiReleaseEvent(player, prison.reason, ReleaseCause.EXEMPT));
+            notifyStaff(msg("exempt-discarded", "&7%player% e imune ao castigo — punicao descartada.")
+                    .replace("%player%", player.getName()), player.getUniqueId());
+            return;
         }
+
+        if (System.currentTimeMillis() >= prison.endTime) {
+            if (prison.returnLocation == null) {
+                // Punicao offline que expirou antes do primeiro login: nunca chegou a
+                // ser aplicada, entao nao ha nada a restaurar nem para onde teleportar.
+                prisons.remove(player.getUniqueId());
+                voidState.releaseBand(prison.band);
+                save();
+                Bukkit.getPluginManager().callEvent(
+                        new LouiReleaseEvent(player, prison.reason, ReleaseCause.EXPIRED));
+            } else {
+                releaseInternal(player, true, ReleaseCause.EXPIRED);
+            }
+            return;
+        }
+
+        if (prison.returnLocation == null) {
+            // Primeiro login apos punicao offline: o ponto de retorno e onde ele entrou.
+            prison.returnLocation = player.getLocation().clone();
+            prison.returnGameMode = player.getGameMode();
+            prison.returnAllowFlight = player.getAllowFlight();
+            save();
+        }
+
+        prison.playerName = player.getName();
+        applyVoidState(player, prison);
     }
 
     public void handleQuit(Player player) {
@@ -344,7 +413,7 @@ public class PrisonManager {
         for (Prison prison : prisons.values()) {
             long remaining = Math.max(0L, prison.endTime - System.currentTimeMillis()) / 60000L;
             sender.sendMessage(ChatColor.GRAY + "- " + ChatColor.WHITE + prison.playerName
-                    + ChatColor.GRAY + " (" + formatDuration(remaining) + " restantes): "
+                    + ChatColor.GRAY + " (" + TimeParser.formatDuration(remaining) + " restantes): "
                     + ChatColor.YELLOW + prison.reason);
         }
     }
@@ -366,6 +435,7 @@ public class PrisonManager {
             yaml.set(base + "reason", p.reason);
             yaml.set(base + "gamemode", p.returnGameMode == null ? "SURVIVAL" : p.returnGameMode.name());
             yaml.set(base + "allow-flight", p.returnAllowFlight);
+            yaml.set(base + "band", p.band);
             Location l = p.returnLocation;
             if (l != null && l.getWorld() != null) {
                 yaml.set(base + "loc.world", l.getWorld().getName());
@@ -406,6 +476,7 @@ public class PrisonManager {
                     p.returnGameMode = GameMode.SURVIVAL;
                 }
                 p.returnAllowFlight = sec.getBoolean("allow-flight", false);
+                p.band = sec.getInt("band", -1);
 
                 String worldName = sec.getString("loc.world", null);
                 World world = worldName == null ? null : Bukkit.getWorld(worldName);
@@ -416,6 +487,7 @@ public class PrisonManager {
                 }
 
                 prisons.put(uuid, p);
+                voidState.reserveBand(p.band);
             } catch (IllegalArgumentException ignored) {
             }
         }
@@ -423,6 +495,21 @@ public class PrisonManager {
     }
 
     public void shutdown() {
+        if (plugin.getConfig().getBoolean("safety.release-all-on-disable", true)) {
+            // Coletar antes de soltar: releaseInternal modifica o mapa.
+            List<Player> online = new ArrayList<>();
+            for (UUID uuid : prisons.keySet()) {
+                Player p = Bukkit.getPlayer(uuid);
+                if (p != null && p.isOnline()) online.add(p);
+            }
+            for (Player p : online) {
+                releaseInternal(p, false, ReleaseCause.SHUTDOWN);
+            }
+            if (!online.isEmpty()) {
+                plugin.getLogger().info("[LOUI] " + online.size() + " preso(s) solto(s) no desligamento.");
+            }
+        }
+
         for (Prison p : prisons.values()) {
             if (p.bar != null) p.bar.removeAll();
         }
