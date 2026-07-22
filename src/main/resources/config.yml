@@ -27,9 +27,14 @@ messages:
   not-jailed: '&cEsse jogador nao esta contido.'
   already-free: '&aJogador libertado.'
   usage: '&7Uso: /loui <nick> <tempo: 30m ou 2d> <motivo...> | /loui free <nick> | /loui list'
+  is-exempt: '&cEsse jogador e imune ao castigo.'
 
 safety:
   # Solta todos os presos ONLINE quando o plugin e desabilitado. Sem isso, remover
   # o plugin deixa o jogador cego e invulneravel no vazio, sem comando que resolva.
   # Presos OFFLINE nao sao alcancados — solte-os com /loui free antes de desinstalar.
   release-all-on-disable: true
+
+notify:
+  # Quem recebe o aviso quando alguem e contido.
+  permission: loui.notify

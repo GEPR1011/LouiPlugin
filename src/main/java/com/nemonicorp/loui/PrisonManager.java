@@ -117,12 +117,20 @@ public class PrisonManager {
                 .replace("%time%", pretty)
                 .replace("%minutes%", String.valueOf(minutes))
                 .replace("%reason%", reason);
-        Player executor = Bukkit.getPlayerExact(byWhom);
-        if (executor != null) executor.sendMessage(m2);
+        notifyStaff(m2, target.getUniqueId());
         Bukkit.getConsoleSender().sendMessage(m2 + ChatColor.DARK_GRAY + " (por " + byWhom + ")");
 
         plugin.getLogger().info("[LOUI] " + target.getName() + " contido por " + pretty
                 + ". Motivo: " + reason + " (por " + byWhom + ")");
+    }
+
+    /** Envia uma mensagem a todo jogador online com a permissao de notificacao. */
+    public void notifyStaff(String message, UUID excluded) {
+        String permission = plugin.getConfig().getString("notify.permission", "loui.notify");
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            if (excluded != null && p.getUniqueId().equals(excluded)) continue;
+            if (p.hasPermission(permission)) p.sendMessage(message);
+        }
     }
 
     public void freeByName(CommandSender sender, String name) {

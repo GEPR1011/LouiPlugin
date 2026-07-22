@@ -1,13 +1,8 @@
 package com.nemonicorp.loui;
 
 import org.bukkit.Bukkit;
-import org.bukkit.command.Command;
-import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * LouiPlugin — castigo void.
@@ -31,6 +26,10 @@ public class LouiPlugin extends JavaPlugin {
         manager = new PrisonManager(this);
         manager.load();
 
+        LouiCommand executor = new LouiCommand(manager);
+        getCommand("loui").setExecutor(executor);
+        getCommand("loui").setTabCompleter(executor);
+
         getServer().getPluginManager().registerEvents(new LouiListener(this, manager), this);
 
         // Tick de 1s: bossbar, expiracao e loop de queda
@@ -53,87 +52,5 @@ public class LouiPlugin extends JavaPlugin {
 
     public PrisonManager getManager() {
         return manager;
-    }
-
-    @Override
-    public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-        if (!sender.hasPermission("loui.use")) {
-            sender.sendMessage(manager.msg("no-permission", "&cSem permissao."));
-            return true;
-        }
-
-        if (args.length == 0) {
-            sender.sendMessage(manager.msg("usage", "&7Uso: /loui <nick> <tempo: 30m ou 2d> <motivo...>"));
-            return true;
-        }
-
-        // /loui list
-        if (args[0].equalsIgnoreCase("list")) {
-            manager.sendList(sender);
-            return true;
-        }
-
-        // /loui free <nick>
-        if (args[0].equalsIgnoreCase("free")) {
-            if (args.length < 2) {
-                sender.sendMessage(manager.msg("usage", "&7Uso: /loui free <nick>"));
-                return true;
-            }
-            manager.freeByName(sender, args[1]);
-            return true;
-        }
-
-        // /loui <nick> <minutos> <motivo...>
-        if (args.length < 3) {
-            sender.sendMessage(manager.msg("usage", "&7Uso: /loui <nick> <tempo: 30m ou 2d> <motivo...>"));
-            return true;
-        }
-
-        Player target = Bukkit.getPlayerExact(args[0]);
-        if (target == null) {
-            sender.sendMessage(manager.msg("not-online", "&cJogador nao esta online."));
-            return true;
-        }
-
-        long minutes = TimeParser.parse(args[1]);
-        if (minutes <= 0) {
-            sender.sendMessage(manager.msg("usage", "&7Tempo invalido. Use minutos, ou sufixo m/h/d. Ex: 30m, 2h, 2d."));
-            return true;
-        }
-
-        StringBuilder sb = new StringBuilder();
-        for (int i = 2; i < args.length; i++) {
-            if (i > 2) sb.append(' ');
-            sb.append(args[i]);
-        }
-        String reason = sb.toString();
-
-        manager.imprison(target, minutes, reason, sender.getName());
-        return true;
-    }
-
-@Override
-    public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
-        List<String> out = new ArrayList<>();
-        if (!sender.hasPermission("loui.use")) return out;
-
-        if (args.length == 1) {
-            String a = args[0].toLowerCase();
-            if ("free".startsWith(a)) out.add("free");
-            if ("list".startsWith(a)) out.add("list");
-            for (Player p : Bukkit.getOnlinePlayers()) {
-                if (p.getName().toLowerCase().startsWith(a)) out.add(p.getName());
-            }
-        } else if (args.length == 2 && args[0].equalsIgnoreCase("free")) {
-            String a = args[1].toLowerCase();
-            for (String name : manager.getPrisonerNames()) {
-                if (name.toLowerCase().startsWith(a)) out.add(name);
-            }
-        } else if (args.length == 2) {
-            out.add("5");
-            out.add("10");
-            out.add("30");
-        }
-        return out;
     }
 }
