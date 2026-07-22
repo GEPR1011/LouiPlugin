@@ -3,6 +3,8 @@ package com.nemonicorp.loui;
 import com.nemonicorp.loui.api.LouiImprisonEvent;
 import com.nemonicorp.loui.api.LouiReleaseEvent;
 import com.nemonicorp.loui.api.ReleaseCause;
+import com.nemonicorp.loui.mode.PunishmentMode;
+import com.nemonicorp.loui.mode.VoidMode;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
@@ -42,15 +44,24 @@ public class PrisonManager {
         String reason;
         int band = -1;    // faixa de altura ocupada; -1 = nao atribuida
         transient BossBar bar;
+
+        /** Acessores para o pacote mode, que vive fora deste pacote. */
+        public int getBand() {
+            return band;
+        }
+
+        public void setBand(int band) {
+            this.band = band;
+        }
     }
 
     private final LouiPlugin plugin;
     private final Map<UUID, Prison> prisons = new HashMap<>();
-    private final VoidState voidState;
+    private final PunishmentMode voidState;
 
     public PrisonManager(LouiPlugin plugin) {
         this.plugin = plugin;
-        this.voidState = new VoidState(plugin);
+        this.voidState = new VoidMode(plugin);
     }
 
     // ── Mensagens ──
@@ -282,7 +293,7 @@ public class PrisonManager {
         if (prison.bar != null) prison.bar.removeAll();
 
         voidState.restore(player, prison.returnLocation, prison.returnGameMode, prison.returnAllowFlight);
-        voidState.releaseBand(prison.band);
+        if (voidState instanceof VoidMode vm) vm.releaseBand(prison.band);
 
         player.sendMessage(msg("released", "&aVoce foi libertado. Comporte-se."));
         if (persist) save();
@@ -335,14 +346,8 @@ public class PrisonManager {
                 continue;
             }
 
-            // Loop de queda infinita, dentro da faixa do preso
-            if (player.getLocation().getY() < voidState.bandFloor(prison.band)) {
-                voidState.teleportToTop(player, prison.band);
-            }
-
-            // Garantias (caso outro plugin tenha mexido)
-            if (!player.isInvulnerable()) player.setInvulnerable(true);
-            voidState.applyEffects(player);
+            // Mantem o preso onde deve estar e reafirma os efeitos
+            voidState.contain(player, prison);
 
             updateBar(prison);
         }
@@ -362,7 +367,7 @@ public class PrisonManager {
         // pra contornar loui.exempt punindo um admin enquanto ele estivesse fora.
         if (player.hasPermission("loui.exempt")) {
             prisons.remove(player.getUniqueId());
-            voidState.releaseBand(prison.band);
+            if (voidState instanceof VoidMode vm) vm.releaseBand(prison.band);
             save();
             Bukkit.getPluginManager().callEvent(
                     new LouiReleaseEvent(player, prison.reason, ReleaseCause.EXEMPT));
@@ -376,7 +381,7 @@ public class PrisonManager {
                 // Punicao offline que expirou antes do primeiro login: nunca chegou a
                 // ser aplicada, entao nao ha nada a restaurar nem para onde teleportar.
                 prisons.remove(player.getUniqueId());
-                voidState.releaseBand(prison.band);
+                if (voidState instanceof VoidMode vm) vm.releaseBand(prison.band);
                 save();
                 Bukkit.getPluginManager().callEvent(
                         new LouiReleaseEvent(player, prison.reason, ReleaseCause.EXPIRED));
@@ -487,7 +492,7 @@ public class PrisonManager {
                 }
 
                 prisons.put(uuid, p);
-                voidState.reserveBand(p.band);
+                if (voidState instanceof VoidMode vm) vm.reserveBand(p.band);
             } catch (IllegalArgumentException ignored) {
             }
         }
