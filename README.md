@@ -4,11 +4,12 @@
 
 ### Castigo no vazio para jogadores mal-intencionados
 
-[![Version](https://img.shields.io/badge/versão-v1.1.0-gold?style=for-the-badge&logo=minecraft&logoColor=white)](../../releases)
+[![Version](https://img.shields.io/badge/versão-v1.2.0-gold?style=for-the-badge&logo=minecraft&logoColor=white)](../../releases)
 [![Server](https://img.shields.io/badge/servidor-NemonicRP-purple?style=for-the-badge)](.)
 [![API](https://img.shields.io/badge/Paper%20%2F%20Spigot-1.21+-green?style=for-the-badge&logo=java)](.)
 [![Java](https://img.shields.io/badge/Java-21+-orange?style=for-the-badge&logo=openjdk)](.)
 [![Deps](https://img.shields.io/badge/dependências-nenhuma-lightgrey?style=for-the-badge)](.)
+[![PlaceholderAPI](https://img.shields.io/badge/PlaceholderAPI-opcional-blue?style=for-the-badge)](.)
 
 *Alternativa ao ban · Sem dependências · Persistente entre restarts*
 
@@ -159,6 +160,52 @@ Numa punição aplicada a alguém **offline** não há posição a capturar, ent
 
 ---
 
+## 🔌 Integração com outros plugins
+
+### Eventos
+
+O plugin dispara dois eventos em `com.nemonicorp.loui.api`.
+
+**`LouiImprisonEvent`** — cancelável, disparado **antes** de o castigo ser aplicado. Cancelar impede a punição por completo: nenhum estado muda, nenhum teleporte acontece, e o moderador é avisado.
+
+| Método | Devolve |
+|---|---|
+| `getTarget()` | `OfflinePlayer` — é um `Player` quando `isOffline()` é `false` |
+| `getMinutes()` | Duração em minutos |
+| `getReason()` | Motivo informado |
+| `getByWhom()` | Quem executou o comando |
+| `isOffline()` | `true` se o alvo não estava online |
+
+**`LouiReleaseEvent`** — **não** cancelável, disparado quando um castigo termina. Vetar uma soltura prenderia o jogador para sempre, então a API não permite.
+
+| Método | Devolve |
+|---|---|
+| `getPlayer()` | O jogador solto |
+| `getReason()` | Motivo original do castigo |
+| `getCause()` | `MANUAL`, `EXPIRED`, `SHUTDOWN` ou `EXEMPT` |
+
+| Causa | Quando |
+|---|---|
+| `MANUAL` | `/loui free` |
+| `EXPIRED` | A pena chegou ao fim |
+| `SHUTDOWN` | Release em massa ao desabilitar o plugin |
+| `EXEMPT` | Punição descartada no login por imunidade |
+
+### PlaceholderAPI
+
+Opcional. Se a PlaceholderAPI estiver instalada, quatro placeholders ficam disponíveis; sem ela, o plugin funciona normalmente e nada é registrado.
+
+| Placeholder | Devolve | Sem castigo ativo |
+|---|---|---|
+| `%loui_jailed%` | `sim` / `nao` (configurável) | `nao` |
+| `%loui_time_left%` | `2:00:00` | vazio |
+| `%loui_reason%` | O motivo | vazio |
+| `%loui_count%` | Total de presos | o número real |
+
+> `%loui_time_left%` devolve string vazia — e não `00:00` — para quem não está contido, permitindo esconder o campo no scoreboard.
+
+---
+
 ## ⚙️ Requisitos
 
 | Requisito | Versão |
@@ -201,6 +248,8 @@ LouiPlugin/
 │   ├── LouiCommand.java                     # /loui, tab-complete, imunidade
 │   ├── LouiListener.java                    # bloqueios (dano, drops, comandos, tp)
 │   ├── PrisonManager.java                   # estado, persistência, bossbar
+│   ├── LouiPlaceholders.java                # expansao PlaceholderAPI (opcional)
+│   ├── api/                                 # superfície pública: eventos e enum
 │   ├── VoidState.java                       # teleporte, efeitos, faixas de altura
 │   ├── BandPool.java                        # ocupação das faixas
 │   └── TimeParser.java                      # parse e formatação de durações
