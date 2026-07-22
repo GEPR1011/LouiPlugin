@@ -12,17 +12,13 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
-import org.bukkit.potion.PotionEffect;
-import org.bukkit.potion.PotionEffectType;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -39,16 +35,17 @@ public class PrisonManager {
         long endTime;     // epoch ms
         long totalMs;
         String reason;
+        int band = -1;    // faixa de altura ocupada; -1 = nao atribuida
         transient BossBar bar;
     }
 
     private final LouiPlugin plugin;
     private final Map<UUID, Prison> prisons = new HashMap<>();
-    /** Teleportes feitos pelo proprio plugin (pra nao serem cancelados pelo listener). */
-    private final Set<UUID> internalTeleport = new HashSet<>();
+    private final VoidState voidState;
 
     public PrisonManager(LouiPlugin plugin) {
         this.plugin = plugin;
+        this.voidState = new VoidState(plugin);
     }
 
     // ── Mensagens ──
@@ -71,7 +68,7 @@ public class PrisonManager {
     }
 
     public boolean isInternalTeleport(UUID uuid) {
-        return internalTeleport.contains(uuid);
+        return voidState.isInternalTeleport(uuid);
     }
 
     public List<String> getPrisonerNames() {
@@ -160,26 +157,8 @@ public class PrisonManager {
 
         if (prison.bar != null) prison.bar.removeAll();
 
-        player.removePotionEffect(PotionEffectType.DARKNESS);
-        player.removePotionEffect(PotionEffectType.BLINDNESS);
-        player.setInvulnerable(false);
-        player.setFallDistance(0f);
-
-        internalTeleport.add(player.getUniqueId());
-        try {
-            Location ret = prison.returnLocation;
-            if (ret != null && ret.getWorld() != null) {
-                player.teleport(ret);
-            } else {
-                player.teleport(player.getWorld().getSpawnLocation());
-            }
-        } finally {
-            internalTeleport.remove(player.getUniqueId());
-        }
-
-        player.setFallDistance(0f);
-        if (prison.returnGameMode != null) player.setGameMode(prison.returnGameMode);
-        player.setAllowFlight(prison.returnAllowFlight);
+        voidState.restore(player, prison.returnLocation, prison.returnGameMode, prison.returnAllowFlight);
+        voidState.releaseBand(prison.band);
 
         player.sendMessage(msg("released", "&aVoce foi libertado. Comporte-se."));
         save();
@@ -187,19 +166,9 @@ public class PrisonManager {
         plugin.getLogger().info("[LOUI] " + player.getName() + " libertado.");
     }
 
-    /** Aplica o estado de vazio: tp, queda, escuridao, invulneravel, bossbar. */
+    /** Aplica o estado de vazio e monta a bossbar. */
     private void applyVoidState(Player player, Prison prison) {
-        player.setGameMode(GameMode.ADVENTURE);
-        player.setAllowFlight(false);
-        player.setInvulnerable(true);
-        player.setFallDistance(0f);
-
-        teleportToVoidTop(player);
-
-        player.addPotionEffect(new PotionEffect(PotionEffectType.DARKNESS,
-                PotionEffect.INFINITE_DURATION, 0, true, false));
-        player.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS,
-                PotionEffect.INFINITE_DURATION, 0, true, false));
+        voidState.apply(player, prison);
 
         if (prison.bar == null) {
             BarColor color;
@@ -212,28 +181,6 @@ public class PrisonManager {
         }
         prison.bar.addPlayer(player);
         updateBar(prison);
-    }
-
-    private World voidWorld() {
-        String name = plugin.getConfig().getString("void.world", "");
-        World w = (name == null || name.isEmpty()) ? null : Bukkit.getWorld(name);
-        if (w == null) w = Bukkit.getWorlds().get(0);
-        return w;
-    }
-
-    private void teleportToVoidTop(Player player) {
-        double x = plugin.getConfig().getDouble("void.x", 250000.5);
-        double z = plugin.getConfig().getDouble("void.z", 250000.5);
-        double topY = plugin.getConfig().getDouble("void.top-y", 5000.0);
-
-        Location loc = new Location(voidWorld(), x, topY, z);
-        internalTeleport.add(player.getUniqueId());
-        try {
-            player.teleport(loc);
-        } finally {
-            internalTeleport.remove(player.getUniqueId());
-        }
-        player.setFallDistance(0f);
     }
 
     private void updateBar(Prison prison) {
@@ -252,7 +199,6 @@ public class PrisonManager {
     public void tick() {
         if (prisons.isEmpty()) return;
 
-        double minY = plugin.getConfig().getDouble("void.min-y", 1500.0);
         List<Player> toRelease = new ArrayList<>();
 
         for (Map.Entry<UUID, Prison> e : prisons.entrySet()) {
@@ -265,21 +211,14 @@ public class PrisonManager {
                 continue;
             }
 
-            // Loop de queda infinita
-            if (player.getLocation().getY() < minY) {
-                teleportToVoidTop(player);
+            // Loop de queda infinita, dentro da faixa do preso
+            if (player.getLocation().getY() < voidState.bandFloor(prison.band)) {
+                voidState.teleportToTop(player, prison.band);
             }
 
             // Garantias (caso outro plugin tenha mexido)
             if (!player.isInvulnerable()) player.setInvulnerable(true);
-            if (!player.hasPotionEffect(PotionEffectType.DARKNESS)) {
-                player.addPotionEffect(new PotionEffect(PotionEffectType.DARKNESS,
-                        PotionEffect.INFINITE_DURATION, 0, true, false));
-            }
-            if (!player.hasPotionEffect(PotionEffectType.BLINDNESS)) {
-                player.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS,
-                        PotionEffect.INFINITE_DURATION, 0, true, false));
-            }
+            voidState.applyEffects(player);
 
             updateBar(prison);
         }
@@ -341,6 +280,7 @@ public class PrisonManager {
             yaml.set(base + "reason", p.reason);
             yaml.set(base + "gamemode", p.returnGameMode == null ? "SURVIVAL" : p.returnGameMode.name());
             yaml.set(base + "allow-flight", p.returnAllowFlight);
+            yaml.set(base + "band", p.band);
             Location l = p.returnLocation;
             if (l != null && l.getWorld() != null) {
                 yaml.set(base + "loc.world", l.getWorld().getName());
@@ -381,6 +321,7 @@ public class PrisonManager {
                     p.returnGameMode = GameMode.SURVIVAL;
                 }
                 p.returnAllowFlight = sec.getBoolean("allow-flight", false);
+                p.band = sec.getInt("band", -1);
 
                 String worldName = sec.getString("loc.world", null);
                 World world = worldName == null ? null : Bukkit.getWorld(worldName);
@@ -391,6 +332,7 @@ public class PrisonManager {
                 }
 
                 prisons.put(uuid, p);
+                voidState.reserveBand(p.band);
             } catch (IllegalArgumentException ignored) {
             }
         }
