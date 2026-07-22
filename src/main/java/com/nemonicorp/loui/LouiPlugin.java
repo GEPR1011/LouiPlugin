@@ -8,9 +8,10 @@ import org.bukkit.plugin.java.JavaPlugin;
  * LouiPlugin — castigo void.
  *
  * /loui <nick> <tempo> <motivo...>    → joga o jogador num vazio escuro em queda
- *   tempo: minutos puros (30), sufixo de minutos (30m) ou de dias (2d).
+ *   tempo: minutos puros (30) ou sufixo de minutos (30m), horas (2h) ou dias (2d).
  *                                       constante, invulneravel, sem drops e sem
  *                                       comandos, com bossbar (motivo + tempo).
+ *                                       Funciona tambem com o alvo offline.
  * /loui free <nick>                   → liberta antes da hora.
  * /loui list                          → lista os contidos.
  *

@@ -258,7 +258,7 @@ public class PrisonManager {
         prison.bar.setProgress(progress);
     }
 
-// ── Tick (1s) ──
+    // ── Tick (1s) ──
 
     public void tick() {
         if (prisons.isEmpty()) return;
