@@ -33,6 +33,13 @@ public class LouiPlugin extends JavaPlugin {
 
         getServer().getPluginManager().registerEvents(new LouiListener(this, manager), this);
 
+        // A classe da expansao so pode ser tocada com a PlaceholderAPI instalada:
+        // referencia-la sem ela lanca NoClassDefFoundError e derruba o onEnable.
+        if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
+            new LouiPlaceholders(this, manager).register();
+            getLogger().info("PlaceholderAPI detectada: placeholders registrados.");
+        }
+
         // Tick de 1s: bossbar, expiracao e loop de queda
         Bukkit.getScheduler().runTaskTimer(this, () -> manager.tick(), 20L, 20L);
 

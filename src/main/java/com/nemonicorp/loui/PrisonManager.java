@@ -97,6 +97,24 @@ public class PrisonManager {
         return names;
     }
 
+    /** Quantos castigos existem, incluindo os de jogadores offline. */
+    public int getPrisonerCount() {
+        return prisons.size();
+    }
+
+    /** Milissegundos restantes do castigo, ou 0 se o jogador nao estiver contido. */
+    public long getRemainingMillis(UUID uuid) {
+        Prison prison = prisons.get(uuid);
+        if (prison == null) return 0L;
+        return Math.max(0L, prison.endTime - System.currentTimeMillis());
+    }
+
+    /** Motivo do castigo, ou string vazia se o jogador nao estiver contido. */
+    public String getReason(UUID uuid) {
+        Prison prison = prisons.get(uuid);
+        return prison == null ? "" : prison.reason;
+    }
+
     // ── Acoes principais ──
 
     /** Devolve false quando outro plugin vetou a punicao. */
