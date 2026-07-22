@@ -68,14 +68,25 @@ public class LouiListener implements Listener {
         }
     }
 
-    // Nenhum comando durante o castigo
+    /** Raiz do comando digitado: sem barra, sem argumentos, em minusculas. */
+    static String commandRoot(String raw) {
+        if (raw == null) return "";
+        String s = raw.trim();
+        if (s.startsWith("/")) s = s.substring(1);
+        int space = s.indexOf(' ');
+        if (space >= 0) s = s.substring(0, space);
+        return s.toLowerCase();
+    }
+
+    // Comandos bloqueados durante o castigo, exceto os liberados na whitelist
     @EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
     public void onCommand(PlayerCommandPreprocessEvent event) {
         Player p = event.getPlayer();
-        if (manager.isImprisoned(p.getUniqueId())) {
-            event.setCancelled(true);
-            p.sendMessage(manager.msg("no-commands", "&cVoce nao pode usar comandos enquanto estiver contido."));
-        }
+        if (!manager.isImprisoned(p.getUniqueId())) return;
+        if (manager.isCommandAllowed(event.getMessage())) return;
+
+        event.setCancelled(true);
+        p.sendMessage(manager.msg("no-commands", "&cVoce nao pode usar comandos enquanto estiver contido."));
     }
 
     // Bloquear teleportes de OUTRAS fontes (ender pearl, outros plugins, /spawn etc.)

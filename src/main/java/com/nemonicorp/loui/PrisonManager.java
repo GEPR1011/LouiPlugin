@@ -72,6 +72,21 @@ public class PrisonManager {
         return voidState.isInternalTeleport(uuid);
     }
 
+    /**
+     * Whitelist de comandos permitidos durante o castigo. Lista vazia bloqueia tudo.
+     * Aliases nao sao resolvidos: liberar /msg nao libera /tell.
+     */
+    public boolean isCommandAllowed(String rawMessage) {
+        List<String> allowed = plugin.getConfig().getStringList("restrictions.allowed-commands");
+        if (allowed.isEmpty()) return false;
+
+        String root = LouiListener.commandRoot(rawMessage);
+        for (String entry : allowed) {
+            if (LouiListener.commandRoot(entry).equals(root)) return true;
+        }
+        return false;
+    }
+
     public List<String> getPrisonerNames() {
         List<String> names = new ArrayList<>();
         for (Prison p : prisons.values()) names.add(p.playerName);

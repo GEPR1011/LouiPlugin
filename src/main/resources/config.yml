@@ -40,3 +40,9 @@ safety:
 notify:
   # Quem recebe o aviso quando alguem e contido.
   permission: loui.notify
+
+restrictions:
+  # Comandos que o preso ainda pode usar — util pra dar um canal de recurso.
+  # Vazio bloqueia tudo, que e o comportamento padrao.
+  # Aliases nao sao resolvidos: liberar /msg nao libera /tell.
+  allowed-commands: []
